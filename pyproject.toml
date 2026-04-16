@@ -1,5 +1,5 @@
 [project]
-name = "chesed-backend"
+name = "backend"
 version = "0.1.0"
 description = "FastAPI backend for Chesed App"
 authors = [
