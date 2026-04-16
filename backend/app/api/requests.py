@@ -8,6 +8,7 @@ from math import radians, cos, sin, asin, sqrt
 from app.db.session import get_db_session
 from app.models import Request, User, RequestStatus
 from app.schemas.request import RequestCreate, RequestResponse, RequestUpdate
+from app.core.dependencies import get_current_user
 
 router = APIRouter(prefix="/requests", tags=["requests"])
 
@@ -26,21 +27,12 @@ def haversine(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
 @router.post("/", response_model=RequestResponse, status_code=status.HTTP_201_CREATED)
 async def create_request(
     request_data: RequestCreate,
-    requester_id: UUID = Query(..., description="ID of the user making the request"),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> RequestResponse:
     """Create a new favor request."""
-    # Check if requester exists
-    stmt = select(User).where(User.id == requester_id)
-    result = await db.execute(stmt)
-    if not result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Requester user not found",
-        )
-
     new_request = Request(
-        requester_id=requester_id,
+        requester_id=current_user.id,
         category=request_data.category,
         title=request_data.title,
         description=request_data.description,
@@ -131,7 +123,7 @@ async def get_nearby_requests(
 async def update_request(
     request_id: UUID,
     request_update: RequestUpdate,
-    requester_id: UUID = Query(...),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> RequestResponse:
     """Update a request (only by requester)."""
@@ -145,7 +137,7 @@ async def update_request(
             detail="Request not found",
         )
 
-    if request_obj.requester_id != requester_id:
+    if request_obj.requester_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only requester can update this request",
@@ -163,7 +155,7 @@ async def update_request(
 @router.delete("/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def cancel_request(
     request_id: UUID,
-    requester_id: UUID = Query(...),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> None:
     """Cancel a request (only by requester)."""
@@ -177,7 +169,7 @@ async def cancel_request(
             detail="Request not found",
         )
 
-    if request_obj.requester_id != requester_id:
+    if request_obj.requester_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only requester can cancel this request",

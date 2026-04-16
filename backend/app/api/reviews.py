@@ -7,18 +7,23 @@ from typing import List
 from app.db.session import get_db_session
 from app.models import Review, Commitment, User
 from app.schemas.commitment import ReviewCreate, ReviewResponse
+from app.core.dependencies import get_current_user
 
 router = APIRouter(prefix="/reviews", tags=["reviews"])
 
 
 @router.post("/", response_model=ReviewResponse, status_code=status.HTTP_201_CREATED)
 async def create_review(
-    review_data: ReviewCreate,
+    commitment_id: UUID = Query(...),
+    rating: int = Query(..., ge=1, le=5),
+    comment: str = Query(None),
+    reviewed_user_id: UUID = Query(...),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> ReviewResponse:
     """Create a review for a completed commitment."""
     # Verify commitment exists
-    stmt_commit = select(Commitment).where(Commitment.id == review_data.commitment_id)
+    stmt_commit = select(Commitment).where(Commitment.id == commitment_id)
     result_commit = await db.execute(stmt_commit)
     commitment = result_commit.scalar_one_or_none()
 
@@ -30,7 +35,7 @@ async def create_review(
 
     # Check if review already exists for this commitment
     stmt_existing = select(Review).where(
-        Review.commitment_id == review_data.commitment_id
+        Review.commitment_id == commitment_id
     )
     result_existing = await db.execute(stmt_existing)
     if result_existing.scalar_one_or_none():
@@ -39,17 +44,8 @@ async def create_review(
             detail="Review already exists for this commitment",
         )
 
-    # Verify reviewer exists
-    stmt_reviewer = select(User).where(User.id == review_data.reviewer_id)
-    result_reviewer = await db.execute(stmt_reviewer)
-    if not result_reviewer.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Reviewer user not found",
-        )
-
     # Verify reviewed user exists
-    stmt_reviewed = select(User).where(User.id == review_data.reviewed_user_id)
+    stmt_reviewed = select(User).where(User.id == reviewed_user_id)
     result_reviewed = await db.execute(stmt_reviewed)
     if not result_reviewed.scalar_one_or_none():
         raise HTTPException(
@@ -58,11 +54,11 @@ async def create_review(
         )
 
     new_review = Review(
-        commitment_id=review_data.commitment_id,
-        reviewer_id=review_data.reviewer_id,
-        reviewed_user_id=review_data.reviewed_user_id,
-        rating=review_data.rating,
-        comment=review_data.comment,
+        commitment_id=commitment_id,
+        reviewer_id=current_user.id,
+        reviewed_user_id=reviewed_user_id,
+        rating=rating,
+        comment=comment,
     )
 
     db.add(new_review)
@@ -72,7 +68,7 @@ async def create_review(
     if reviewed_user:
         # Get average rating for this user
         stmt_avg = select(func.avg(Review.rating)).where(
-            Review.reviewed_user_id == review_data.reviewed_user_id
+            Review.reviewed_user_id == reviewed_user_id
         )
         result_avg = await db.execute(stmt_avg)
         avg_rating = result_avg.scalar() or 0

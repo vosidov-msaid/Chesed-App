@@ -7,6 +7,8 @@ from typing import List
 from app.db.session import get_db_session
 from app.models import User
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
+from app.core.security import hash_password
+from app.core.dependencies import get_current_user
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -26,8 +28,8 @@ async def register_user(
             detail="User with this phone number already exists",
         )
 
-    # Hash password (placeholder - will use bcrypt with JWT)
-    hashed_password = user_data.password  # TODO: implement bcrypt hashing
+    # Hash password
+    hashed_password = hash_password(user_data.password)
 
     new_user = User(
         phone_number=user_data.phone_number,
