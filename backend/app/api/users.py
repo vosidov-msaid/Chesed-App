@@ -49,9 +49,10 @@ async def register_user(
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: UUID,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> UserResponse:
-    """Get user profile by ID."""
+    """Get user profile by ID (authenticated users can view any profile)."""
     stmt = select(User).where(User.id == user_id)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
@@ -68,36 +69,35 @@ async def get_user(
 async def update_user(
     user_id: UUID,
     user_update: UserUpdate,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> UserResponse:
-    """Update user profile."""
-    stmt = select(User).where(User.id == user_id)
-    result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
-
-    if not user:
+    """Update user profile (only own profile)."""
+    # Check if user is updating their own profile
+    if current_user.id != user_id:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only update your own profile",
         )
 
     # Update only provided fields
     update_data = user_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
-        setattr(user, field, value)
+        setattr(current_user, field, value)
 
     await db.commit()
-    await db.refresh(user)
-    return user
+    await db.refresh(current_user)
+    return current_user
 
 
 @router.get("/", response_model=List[UserResponse])
 async def list_users(
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
     skip: int = 0,
     limit: int = 100,
 ) -> List[UserResponse]:
-    """List all users with pagination."""
+    """List all users with pagination (authenticated users only)."""
     stmt = select(User).offset(skip).limit(limit)
     result = await db.execute(stmt)
     users = result.scalars().all()
@@ -107,18 +107,16 @@ async def list_users(
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
     user_id: UUID,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> None:
-    """Deactivate a user (soft delete)."""
-    stmt = select(User).where(User.id == user_id)
-    result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
-
-    if not user:
+    """Deactivate user account (only own account)."""
+    # Check if user is deleting their own account
+    if current_user.id != user_id:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only deactivate your own account",
         )
 
-    user.is_active = False
+    current_user.is_active = False
     await db.commit()

@@ -54,9 +54,10 @@ async def create_request(
 @router.get("/{request_id}", response_model=RequestResponse)
 async def get_request(
     request_id: UUID,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> RequestResponse:
-    """Get a specific request by ID."""
+    """Get a specific request by ID (authenticated users only)."""
     stmt = select(Request).where(Request.id == request_id)
     result = await db.execute(stmt)
     request_obj = result.scalar_one_or_none()
@@ -71,12 +72,13 @@ async def get_request(
 
 @router.get("/", response_model=List[RequestResponse])
 async def list_requests(
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
     status_filter: RequestStatus = Query(None, description="Filter by request status"),
     skip: int = Query(0),
     limit: int = Query(100),
 ) -> List[RequestResponse]:
-    """List all requests with optional status filter."""
+    """List all public requests with optional status filter (authenticated users only)."""
     stmt = select(Request).where(Request.is_public == True).offset(skip).limit(limit)
 
     if status_filter:
@@ -93,9 +95,10 @@ async def get_nearby_requests(
     longitude: float = Query(..., description="User longitude"),
     radius_km: float = Query(5.0, description="Search radius in kilometers"),
     category: str = Query(None, description="Filter by favor category"),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> List[RequestResponse]:
-    """Get requests nearby user's location within specified radius."""
+    """Get requests nearby user's location within specified radius (authenticated users only)."""
     stmt = select(Request).where(
         and_(
             Request.is_public == True,

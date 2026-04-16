@@ -77,9 +77,10 @@ async def create_commitment(
 @router.get("/{commitment_id}", response_model=CommitmentResponse)
 async def get_commitment(
     commitment_id: UUID,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> CommitmentResponse:
-    """Get a specific commitment."""
+    """Get a specific commitment (authenticated users only)."""
     stmt = select(Commitment).where(Commitment.id == commitment_id)
     result = await db.execute(stmt)
     commitment = result.scalar_one_or_none()
@@ -94,6 +95,7 @@ async def get_commitment(
 
 @router.get("/", response_model=List[CommitmentResponse])
 async def list_commitments(
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
     request_id: UUID = Query(None),
     helper_id: UUID = Query(None),
@@ -101,7 +103,7 @@ async def list_commitments(
     skip: int = Query(0),
     limit: int = Query(100),
 ) -> List[CommitmentResponse]:
-    """List commitments with optional filters."""
+    """List commitments with optional filters (authenticated users only)."""
     stmt = select(Commitment).offset(skip).limit(limit)
 
     if request_id:

@@ -82,9 +82,10 @@ async def create_review(
 @router.get("/{review_id}", response_model=ReviewResponse)
 async def get_review(
     review_id: UUID,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> ReviewResponse:
-    """Get a specific review."""
+    """Get a specific review (authenticated users only)."""
     stmt = select(Review).where(Review.id == review_id)
     result = await db.execute(stmt)
     review = result.scalar_one_or_none()
@@ -99,13 +100,14 @@ async def get_review(
 
 @router.get("/", response_model=List[ReviewResponse])
 async def list_reviews(
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
     reviewed_user_id: UUID = Query(None),
     reviewer_id: UUID = Query(None),
     skip: int = Query(0),
     limit: int = Query(100),
 ) -> List[ReviewResponse]:
-    """List reviews with optional filters."""
+    """List reviews with optional filters (authenticated users only)."""
     stmt = select(Review).offset(skip).limit(limit)
 
     if reviewed_user_id:
@@ -122,9 +124,10 @@ async def list_reviews(
 @router.get("/user/{user_id}/received", response_model=List[ReviewResponse])
 async def get_user_reviews(
     user_id: UUID,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> List[ReviewResponse]:
-    """Get all reviews received by a user."""
+    """Get all reviews received by a user (authenticated users only)."""
     stmt = select(Review).where(Review.reviewed_user_id == user_id)
     result = await db.execute(stmt)
     reviews = result.scalars().all()
