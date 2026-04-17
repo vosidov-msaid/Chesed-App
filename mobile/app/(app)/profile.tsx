@@ -176,6 +176,11 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Edit Button - Top Right */}
+        <TouchableOpacity style={styles.editIconButton} onPress={openEditModal}>
+          <Text style={styles.editIcon}>✏️</Text>
+        </TouchableOpacity>
+
         {/* Profile Avatar with Badge */}
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
@@ -195,11 +200,6 @@ export default function ProfileScreen() {
           <View style={styles.activeSinceBadge}>
             <Text style={styles.activeSinceText}>ACTIVE SINCE {activityYear}</Text>
           </View>
-
-          {/* Edit Profile Button */}
-          <TouchableOpacity style={styles.editButton} onPress={openEditModal}>
-            <Text style={styles.editButtonText}>Edit Profile</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Your Impact */}
@@ -412,6 +412,21 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 0,
     paddingBottom: 40,
+  },
+  editIconButton: {
+    position: 'absolute',
+    top: 12,
+    right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#f0f0e8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  editIcon: {
+    fontSize: 20,
   },
   profileSection: {
     alignItems: 'center',
@@ -668,6 +683,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
+  },
+  editIcon: {
+    fontSize: 20,
   },
   editButton: {
     marginTop: 16,
