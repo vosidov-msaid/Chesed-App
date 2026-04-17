@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
 import { validatePhone, validatePassword, validateEmail } from '../../utils/validation';
 import { ValidationFeedback, PasswordRequirement, PasswordStrengthBar } from '../../components/ValidationFeedback';
+import PhoneNumberInput from '../../components/PhoneNumberInput';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -54,11 +55,22 @@ export default function RegisterScreen() {
       await register(phoneNumber, firstName, lastName, email, password);
       Alert.alert(
         'Registration Successful',
-        'Check your email to verify your account before logging in.'
+        'Check your email to verify your account before logging in.',
+        [
+          {
+            text: 'OK',
+            onPress: () => router.replace('/(auth)/login'),
+          },
+        ]
       );
-      router.replace('/(auth)/login');
-    } catch {
-      Alert.alert('Registration Failed', error || 'Please try again');
+    } catch (err: any) {
+      const errorMsg = err?.response?.data?.detail || err?.message || 'Registration failed';
+      Alert.alert('Registration Failed', errorMsg, [
+        {
+          text: 'OK',
+          onPress: () => router.replace('/(auth)/login'),
+        },
+      ]);
     }
   };
 
@@ -75,40 +87,17 @@ export default function RegisterScreen() {
           </Text>
         </View>
 
-        {/* Phone Input */}
+        {/* Phone Input with Country Dropdown */}
         <View style={{ marginBottom: 20 }}>
-          <Text style={{ fontSize: 12, fontWeight: '600', color: '#303429', marginBottom: 8 }}>
-            Phone Number
-          </Text>
-          <TextInput
-            style={{
-              height: 48,
-              borderRadius: 12,
-              backgroundColor: phoneNumber && !phoneValidation.isValid ? '#ffe6e0' : '#f4f4e9',
-              borderWidth: phoneNumber && !phoneValidation.isValid ? 1 : 0,
-              borderColor: phoneValidation.isValid && phoneNumber ? '#2f7d3f' : '#a73b21',
-              paddingHorizontal: 16,
-              fontSize: 16,
-              color: '#303429',
-            }}
-            placeholder="+972..."
-            placeholderTextColor="#b1b3a5"
+          <PhoneNumberInput
             value={phoneNumber}
             onChangeText={setPhoneNumber}
+            isValid={phoneValidation.isValid}
+            hasError={phoneNumber !== '' && !phoneValidation.isValid}
+            validationErrors={phoneValidation.errors}
+            placeholder="Enter phone number"
             editable={!isLoading}
-            keyboardType="phone-pad"
           />
-          {phoneNumber && (
-            <>
-              {phoneValidation.isValid ? (
-                <ValidationFeedback isValid message="✓ Valid phone number" />
-              ) : (
-                phoneValidation.errors.map((e, idx) => (
-                  <ValidationFeedback key={idx} isValid={false} message={`✗ ${e}`} />
-                ))
-              )}
-            </>
-          )}
         </View>
 
         {/* First Name */}

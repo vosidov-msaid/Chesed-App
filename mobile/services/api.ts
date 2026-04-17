@@ -44,7 +44,8 @@ class ApiClient {
         console.error('[API] Response error:', error.response?.status, error.config?.url, error.response?.data);
         const originalRequest = error.config;
 
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // Don't try to refresh if the failed request was already a token refresh attempt
+        if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/token')) {
           originalRequest._retry = true;
 
           if (!this.isRefreshing) {
@@ -173,10 +174,19 @@ class ApiClient {
   }
 
   async refreshAccessToken(): Promise<string> {
-    const response = await this.api.post('/auth/token');
-    const { access_token } = response.data;
-    await this.setAccessToken(access_token);
-    return access_token;
+    try {
+      console.log('[API] Attempting token refresh...');
+      const response = await this.api.post('/auth/token');
+      const { access_token } = response.data;
+      console.log('[API] Token refreshed successfully');
+      await this.setAccessToken(access_token);
+      return access_token;
+    } catch (error: any) {
+      console.error('[API] Token refresh failed:', error.response?.status, error.message);
+      // If token refresh fails (401, etc), clear the invalid token
+      await this.clearTokens();
+      throw error;
+    }
   }
 
   async clearTokens() {

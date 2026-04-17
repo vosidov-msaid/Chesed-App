@@ -4,13 +4,13 @@ import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
 import { validatePhone, validatePassword } from '../../utils/validation';
 import { ValidationFeedback } from '../../components/ValidationFeedback';
+import PhoneNumberInput from '../../components/PhoneNumberInput';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, isLoading, error: authError } = useAuthStore();
+  const { login, isLoading, error: authError, clearError } = useAuthStore();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
-  const [localError, setLocalError] = useState('');
 
   // Live validation states
   const phoneValidation = validatePhone(phoneNumber);
@@ -19,10 +19,10 @@ export default function LoginScreen() {
   const isFormValid = phoneValidation.isValid && passwordValidation.isValid;
 
   const handleLogin = async () => {
-    setLocalError('');
+    clearError();
 
     if (!isFormValid) {
-      setLocalError('Please fix all validation errors');
+      Alert.alert('Validation Error', 'Please fix all validation errors');
       return;
     }
 
@@ -34,11 +34,19 @@ export default function LoginScreen() {
     } catch (error: any) {
       console.error('[LoginScreen] Login error:', error);
       const errorMsg = error?.response?.data?.detail || error?.message || 'Login failed';
-      setLocalError(errorMsg);
+      Alert.alert('Login Failed', errorMsg, [
+        {
+          text: 'OK',
+          onPress: () => {
+            // Reset form and clear errors
+            setPhoneNumber('');
+            setPassword('');
+            clearError();
+          },
+        },
+      ]);
     }
   };
-
-  const displayError = localError || authError;
 
   return (
     <View style={{ flex: 1, backgroundColor: '#fafaf0', padding: 24 }}>
@@ -52,35 +60,17 @@ export default function LoginScreen() {
         </Text>
       </View>
 
-      {/* Phone Input */}
+      {/* Phone Input with Country Dropdown */}
       <View style={{ marginBottom: 24 }}>
-        <Text style={{ fontSize: 12, fontWeight: '600', color: '#303429', marginBottom: 8 }}>
-          Phone Number
-        </Text>
-        <TextInput
-          style={{
-            height: 48,
-            borderRadius: 12,
-            backgroundColor: phoneNumber && !phoneValidation.isValid ? '#ffe6e0' : '#f4f4e9',
-            borderWidth: phoneNumber && !phoneValidation.isValid ? 1 : 0,
-            borderColor: phoneValidation.isValid && phoneNumber ? '#2f7d3f' : '#a73b21',
-            paddingHorizontal: 16,
-            fontSize: 16,
-            color: '#303429',
-          }}
-          placeholder="+972..."
-          placeholderTextColor="#b1b3a5"
+        <PhoneNumberInput
           value={phoneNumber}
-          onChangeText={(text) => {
-            setPhoneNumber(text);
-            setLocalError('');
-          }}
+          onChangeText={setPhoneNumber}
+          isValid={phoneValidation.isValid}
+          hasError={phoneNumber !== '' && !phoneValidation.isValid}
+          validationErrors={phoneValidation.errors}
+          placeholder="Enter phone number"
           editable={!isLoading}
-          keyboardType="phone-pad"
         />
-        {phoneNumber && !phoneValidation.isValid && (
-          <ValidationFeedback isValid={false} message="✗ Incorrect phone_number" />
-        )}
       </View>
 
       {/* Password Input */}
@@ -103,10 +93,7 @@ export default function LoginScreen() {
           placeholderTextColor="#b1b3a5"
           secureTextEntry
           value={password}
-          onChangeText={(text) => {
-            setPassword(text);
-            setLocalError('');
-          }}
+          onChangeText={setPassword}
           editable={!isLoading}
         />
         {password && (
@@ -136,15 +123,6 @@ export default function LoginScreen() {
           </View>
         )}
       </View>
-
-      {/* Error Message */}
-      {displayError && (
-        <View style={{ backgroundColor: '#ffe6e0', borderRadius: 8, padding: 12, marginBottom: 16, borderLeftWidth: 4, borderLeftColor: '#a73b21' }}>
-          <Text style={{ color: '#a73b21', fontSize: 14, fontWeight: '500' }}>
-            {displayError}
-          </Text>
-        </View>
-      )}
 
       {/* Login Button */}
       <TouchableOpacity
