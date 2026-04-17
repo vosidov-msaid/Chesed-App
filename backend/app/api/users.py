@@ -3,12 +3,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from uuid import UUID
 from typing import List
+from datetime import datetime, timedelta
 
 from app.db.session import get_db_session
-from app.models import User
+from app.models import User, EmailVerification
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
-from app.core.security import hash_password
+from app.core.security import hash_password, create_email_verification_token
 from app.core.dependencies import get_current_user
+from app.core.config import settings
+from app.services.email_service import get_email_service
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -18,7 +21,11 @@ async def register_user(
     user_data: UserCreate,
     db: AsyncSession = Depends(get_db_session),
 ) -> UserResponse:
-    """Register a new user with phone number and password."""
+    """Register a new user with phone number and password.
+    
+    If email verification is enabled, an email will be sent with verification link.
+    User must verify email before login.
+    """
     # Check if user already exists
     stmt = select(User).where(User.phone_number == user_data.phone_number)
     result = await db.execute(stmt)
@@ -27,6 +34,16 @@ async def register_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User with this phone number already exists",
         )
+
+    # Check if email already exists (if provided)
+    if user_data.email:
+        stmt = select(User).where(User.email == user_data.email)
+        result = await db.execute(stmt)
+        if result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User with this email already exists",
+            )
 
     # Hash password
     hashed_password = hash_password(user_data.password)
@@ -38,11 +55,39 @@ async def register_user(
         email=user_data.email,
         hashed_password=hashed_password,
         role=user_data.role,
+        is_verified=False,  # Default to unverified
     )
 
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
+
+    # If email verification is enabled and user provided email, send verification email
+    if settings.email_verification_enabled and new_user.email:
+        # Generate verification token
+        token = create_email_verification_token(str(new_user.id), new_user.email)
+        expires_at = datetime.utcnow() + timedelta(hours=settings.email_verification_expiry_hours)
+
+        # Create verification record
+        verification = EmailVerification(
+            user_id=new_user.id,
+            email=new_user.email,
+            token=token,
+            expires_at=expires_at,
+            is_verified=False,
+        )
+        db.add(verification)
+        await db.commit()
+
+        # Send verification email
+        verification_link = f"{settings.api_url}/auth/verify-email?token={token}"
+        email_service = get_email_service()
+        email_service.send_verification_email(
+            recipient_email=new_user.email,
+            verification_token=token,
+            verification_link=verification_link,
+        )
+
     return new_user
 
 
@@ -120,3 +165,4 @@ async def delete_user(
 
     current_user.is_active = False
     await db.commit()
+

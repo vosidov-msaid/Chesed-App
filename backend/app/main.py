@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.init_db import init_admin_user
+from app.services.email_service import init_email_service
 from app.api import auth, users, requests, commitments, reviews, health
 
 
@@ -14,6 +15,21 @@ async def lifespan(app: FastAPI):
     print("\n" + "="*60)
     print("Chesed API Starting...")
     print("="*60)
+    
+    # Initialize email service
+    email_config = {
+        "use_mock": settings.use_mock_email,
+        "smtp_host": settings.smtp_host,
+        "smtp_port": settings.smtp_port,
+        "sender_email": settings.sender_email,
+        "sender_name": settings.sender_name,
+        "username": settings.smtp_username,
+        "password": settings.smtp_password,
+    }
+    init_email_service(email_config)
+    email_mode = "MOCK (console only)" if settings.use_mock_email else "PRODUCTION"
+    print(f"Email Service: {email_mode}")
+    
     await init_admin_user()
     print("="*60 + "\n")
     
@@ -46,3 +62,4 @@ app.include_router(users.router)
 app.include_router(requests.router)
 app.include_router(commitments.router)
 app.include_router(reviews.router)
+

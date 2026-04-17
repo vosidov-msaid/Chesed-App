@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 
 
 class TokenResponse(BaseModel):
@@ -17,3 +17,17 @@ class LoginResponse(BaseModel):
     user_id: str
     first_name: str
     last_name: str
+
+
+class SendVerificationEmailRequest(BaseModel):
+    email: EmailStr
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(..., min_length=1)
+
+
+class VerifyEmailResponse(BaseModel):
+    message: str
+    is_verified: bool
+

@@ -4,6 +4,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from app.core.config import settings
+import secrets
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -12,6 +13,12 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 class TokenData(BaseModel):
     user_id: str
     exp: Optional[datetime] = None
+
+
+class VerificationTokenData(BaseModel):
+    user_id: str
+    email: str
+    token_type: str = "email_verification"
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -48,6 +55,13 @@ def create_access_token(user_id: str, expires_delta: Optional[timedelta] = None)
     return encoded_jwt
 
 
+def create_email_verification_token(user_id: str, email: str) -> str:
+    """Create a secure token for email verification (24 hours expiry)."""
+    # Generate a random token
+    token = secrets.token_urlsafe(32)
+    return token
+
+
 def verify_token(token: str) -> Optional[TokenData]:
     """Verify a JWT token and return the user_id."""
     try:
@@ -62,3 +76,4 @@ def verify_token(token: str) -> Optional[TokenData]:
         return TokenData(user_id=user_id)
     except JWTError:
         return None
+
