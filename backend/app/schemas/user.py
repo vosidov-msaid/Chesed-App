@@ -45,6 +45,7 @@ class UserUpdate(BaseModel):
     last_name: Optional[str] = None
     email: Optional[EmailStr] = None
     bio: Optional[str] = None
+    photo_url: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     operating_radius_km: Optional[float] = None
@@ -58,6 +59,7 @@ class UserResponse(UserBase):
     total_favors_given: int
     total_favors_received: int
     bio: Optional[str] = None
+    photo_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

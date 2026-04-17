@@ -30,6 +30,7 @@ class User(Base, TimestampMixin):
     is_verified = Column(Boolean, default=False)
     
     bio = Column(Text, nullable=True)
+    photo_url = Column(String(500), nullable=True)
     reputation_score = Column(Integer, default=0)
     total_favors_given = Column(Integer, default=0)
     total_favors_received = Column(Integer, default=0)

@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from app.core.config import settings
 from app.core.init_db import init_admin_user
@@ -63,3 +65,7 @@ app.include_router(requests.router)
 app.include_router(commitments.router)
 app.include_router(reviews.router)
 
+# Mount static files directory for serving uploaded photos
+upload_dir = Path("uploads")
+upload_dir.mkdir(exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")

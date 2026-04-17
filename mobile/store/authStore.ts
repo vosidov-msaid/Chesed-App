@@ -44,6 +44,7 @@ export interface User {
   is_active: boolean;
   is_verified: boolean;
   bio?: string;
+  photo_url?: string;
   created_at: string;
   total_favors_given: number;
   total_favors_received: number;

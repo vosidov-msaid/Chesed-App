@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from uuid import UUID
 from typing import List
 from datetime import datetime, timedelta
+import os
+import shutil
+from pathlib import Path
 
 from app.db.session import get_db_session
 from app.models import User, EmailVerification
@@ -166,3 +169,53 @@ async def delete_user(
     current_user.is_active = False
     await db.commit()
 
+
+@router.post("/{user_id}/upload-photo")
+async def upload_user_photo(
+    user_id: UUID,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> UserResponse:
+    """Upload a profile photo for the user."""
+    # Check if user is updating their own profile
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only upload photos for your own profile",
+        )
+
+    # Validate file type
+    allowed_types = {"image/jpeg", "image/png", "image/webp"}
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only JPEG, PNG, and WebP images are allowed",
+        )
+
+    # Create uploads directory if it doesn't exist
+    upload_dir = Path("uploads/photos")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate unique filename
+    file_extension = Path(file.filename).suffix
+    unique_filename = f"{user_id}{file_extension}"
+    file_path = upload_dir / unique_filename
+
+    # Save file
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to save photo",
+        )
+
+    # Update user photo_url
+    photo_url = f"/uploads/photos/{unique_filename}"
+    current_user.photo_url = photo_url
+    await db.commit()
+    await db.refresh(current_user)
+
+    return current_user

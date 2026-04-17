@@ -267,6 +267,22 @@ class ApiClient {
     return response.data;
   }
 
+  async uploadUserPhoto(userId: string, photoUri: string) {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: photoUri,
+      type: 'image/jpeg',
+      name: 'profile.jpg',
+    } as any);
+
+    const response = await this.api.post(`/users/${userId}/upload-photo`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  }
+
   async deleteUser(userId: string) {
     await this.api.delete(`/users/${userId}`);
   }

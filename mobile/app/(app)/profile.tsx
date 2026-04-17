@@ -1,9 +1,10 @@
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
 import { useState, useCallback } from 'react';
 import api from '../../services/api';
+import * as ImagePicker from 'expo-image-picker';
 
 interface Review {
   id: string;
@@ -29,6 +30,7 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [freshUser, setFreshUser] = useState(user);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const fetchUserData = async () => {
     if (!user?.id) return;
@@ -126,6 +128,31 @@ export default function ProfileScreen() {
     }
   };
 
+  const pickAndUploadPhoto = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && user?.id) {
+      setUploadingPhoto(true);
+      try {
+        const photoUri = result.assets[0].uri;
+        const updatedUser = await api.uploadUserPhoto(user.id, photoUri);
+        
+        // Update local store with new user data
+        useAuthStore.setState({ user: updatedUser });
+        setFreshUser(updatedUser);
+      } catch (error) {
+        alert('Failed to upload photo');
+      } finally {
+        setUploadingPhoto(false);
+      }
+    }
+  };
+
   // Get initials for avatar
   const initials = `${user?.first_name?.[0] || ''}${user?.last_name?.[0] || ''}`.toUpperCase();
 
@@ -183,14 +210,30 @@ export default function ProfileScreen() {
 
         {/* Profile Avatar with Badge */}
         <View style={styles.profileSection}>
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initials}</Text>
+          <TouchableOpacity 
+            style={styles.avatarContainer}
+            onPress={pickAndUploadPhoto}
+            disabled={uploadingPhoto}
+          >
+            {displayUser?.photo_url ? (
+              <Image
+                source={{ uri: `${api.api.defaults.baseURL}${displayUser.photo_url}?t=${new Date().getTime()}` }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{initials}</Text>
+              </View>
+            )}
+            {uploadingPhoto && (
+              <View style={styles.uploadingOverlay}>
+                <ActivityIndicator size="small" color="#fff" />
+              </View>
+            )}
+            <View style={styles.cameraIcon}>
+              <Text style={styles.cameraIconText}>📷</Text>
             </View>
-            <View style={styles.verifiedBadge}>
-              <Text style={styles.badgeText}>✓</Text>
-            </View>
-          </View>
+          </TouchableOpacity>
 
           {/* Name and Bio */}
           <Text style={styles.fullName}>
@@ -447,6 +490,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 3,
     borderColor: '#d4a574',
+  },
+  avatarImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 3,
+    borderColor: '#d4a574',
+  },
+  cameraIcon: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#3c6a35',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  cameraIconText: {
+    fontSize: 16,
+  },
+  uploadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 60,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   avatarText: {
     fontSize: 48,
