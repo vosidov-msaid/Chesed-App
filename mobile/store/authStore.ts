@@ -43,6 +43,10 @@ export interface User {
   reputation_score: number;
   is_active: boolean;
   is_verified: boolean;
+  bio?: string;
+  created_at: string;
+  total_favors_given: number;
+  total_favors_received: number;
 }
 
 interface AuthState {
