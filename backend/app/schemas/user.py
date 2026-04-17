@@ -57,6 +57,7 @@ class UserResponse(UserBase):
     reputation_score: int
     total_favors_given: int
     total_favors_received: int
+    bio: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

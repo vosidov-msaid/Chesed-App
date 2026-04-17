@@ -1,8 +1,8 @@
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import api from '../../services/api';
 
 interface Review {
@@ -22,27 +22,108 @@ export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editFirstName, setEditFirstName] = useState(user?.first_name || '');
+  const [editLastName, setEditLastName] = useState(user?.last_name || '');
+  const [editBio, setEditBio] = useState(user?.bio || '');
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [freshUser, setFreshUser] = useState(user);
 
-  useEffect(() => {
-    fetchReviews();
-  }, [user?.id]);
-
-  const fetchReviews = async () => {
+  const fetchUserData = async () => {
     if (!user?.id) return;
     try {
-      setLoading(true);
-      const userReviews = await api.getUserReviews(user.id);
-      setReviews(userReviews);
+      const userData = await api.getUser(user.id);
+      setFreshUser(userData);
+      useAuthStore.setState({ user: userData });
+      
+      // Update edit form with fresh data
+      setEditFirstName(userData.first_name);
+      setEditLastName(userData.last_name);
+      setEditBio(userData.bio || '');
     } catch (error) {
-      console.error('Failed to fetch reviews:', error);
+      console.error('Failed to fetch user data:', error);
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchReviews = async () => {
+    if (!user?.id) return;
+    try {
+      const userReviews = await api.getUserReviews(user.id);
+      setReviews(userReviews);
+    } catch (error) {
+      console.error('Failed to fetch reviews:', error);
+    }
+  };
+
+  // Fetch data when screen comes into focus (every time user visits this tab)
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) {
+        fetchUserData();
+        fetchReviews();
+      }
+    }, [user?.id])
+  );
+
   const handleLogout = async () => {
     await logout();
     router.replace('/(auth)/login');
+  };
+
+  const openEditModal = () => {
+    setEditError(null);
+    setEditModalVisible(true);
+  };
+
+  const closeEditModal = () => {
+    setEditModalVisible(false);
+    setEditError(null);
+    // Reset to current user data
+    if (user) {
+      setEditFirstName(user.first_name);
+      setEditLastName(user.last_name);
+      setEditBio(user.bio || '');
+    }
+  };
+
+  const saveProfile = async () => {
+    if (!user?.id) return;
+
+    // Validate inputs
+    if (!editFirstName.trim() || !editLastName.trim()) {
+      setEditError('First name and last name are required');
+      return;
+    }
+
+    setSaving(true);
+    setEditError(null);
+
+    try {
+      const updateData = {
+        first_name: editFirstName.trim(),
+        last_name: editLastName.trim(),
+        bio: editBio.trim() || null,
+      };
+
+      const updatedUser = await api.updateUser(user.id, updateData);
+      
+      // Update local store with new user data
+      useAuthStore.setState({ user: updatedUser });
+      
+      // Close modal and refresh profile data
+      setEditModalVisible(false);
+      
+      // Refresh both user data and reviews
+      await fetchUserData();
+      await fetchReviews();
+    } catch (error: any) {
+      setEditError(error.response?.data?.detail || 'Failed to update profile');
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Get initials for avatar
@@ -50,30 +131,6 @@ export default function ProfileScreen() {
 
   // Get user activity year
   const activityYear = user?.created_at ? new Date(user.created_at).getFullYear() : new Date().getFullYear();
-
-  // Mock impact stats - these are from the user object now
-  const impactStats = [
-    { icon: '🚗', value: user?.total_favors_given || 0, label: 'Rides given' },
-    { icon: '✓', value: user?.total_favors_given || 0, label: 'Meals delivered' },
-    { icon: '🔧', value: user?.total_favors_given || 0, label: 'Neighbors helped moving' },
-  ];
-
-  // Extract categories from user role
-  const getClusters = () => {
-    const clusters = [];
-    if (user?.role === 'both' || user?.role === 'driver') {
-      clusters.push({ icon: '🚗', label: 'Mobility' });
-    }
-    if (user?.role === 'both' || user?.role === 'rider') {
-      clusters.push({ icon: '💪', label: 'Muscle' });
-      clusters.push({ icon: '🍽️', label: 'Food' });
-    }
-    return clusters.length > 0 ? clusters : [
-      { icon: '🚗', label: 'Mobility' },
-      { icon: '💪', label: 'Muscle' },
-      { icon: '🍽️', label: 'Food' },
-    ];
-  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -87,6 +144,33 @@ export default function ProfileScreen() {
     if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
     if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
     return `${Math.floor(diffDays / 365)} years ago`;
+  };
+
+  // Use fresh user data if available, otherwise fall back to cached user
+  const displayUser = freshUser || user;
+
+  // Mock impact stats - these are from the user object now
+  const impactStats = [
+    { icon: '🚗', value: displayUser?.total_favors_given || 0, label: 'Rides given' },
+    { icon: '✓', value: displayUser?.total_favors_given || 0, label: 'Meals delivered' },
+    { icon: '🔧', value: displayUser?.total_favors_given || 0, label: 'Neighbors helped moving' },
+  ];
+
+  // Extract categories from user role
+  const getClusters = () => {
+    const clusters = [];
+    if (displayUser?.role === 'both' || displayUser?.role === 'driver') {
+      clusters.push({ icon: '🚗', label: 'Mobility' });
+    }
+    if (displayUser?.role === 'both' || displayUser?.role === 'rider') {
+      clusters.push({ icon: '💪', label: 'Muscle' });
+      clusters.push({ icon: '🍽️', label: 'Food' });
+    }
+    return clusters.length > 0 ? clusters : [
+      { icon: '🚗', label: 'Mobility' },
+      { icon: '💪', label: 'Muscle' },
+      { icon: '🍽️', label: 'Food' },
+    ];
   };
 
   return (
@@ -105,12 +189,17 @@ export default function ProfileScreen() {
 
           {/* Name and Bio */}
           <Text style={styles.fullName}>
-            {user?.first_name} {user?.last_name}
+            {displayUser?.first_name} {displayUser?.last_name}
           </Text>
-          <Text style={styles.roleTitle}>{user?.bio || 'No bio yet'}</Text>
+          <Text style={styles.roleTitle}>{displayUser?.bio || 'No bio yet'}</Text>
           <View style={styles.activeSinceBadge}>
             <Text style={styles.activeSinceText}>ACTIVE SINCE {activityYear}</Text>
           </View>
+
+          {/* Edit Profile Button */}
+          <TouchableOpacity style={styles.editButton} onPress={openEditModal}>
+            <Text style={styles.editButtonText}>Edit Profile</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Your Impact */}
@@ -142,7 +231,7 @@ export default function ProfileScreen() {
             <View>
               <Text style={styles.contributionsLabel}>TOTAL CONTRIBUTIONS</Text>
               <Text style={styles.contributionsValue}>
-                {(user?.total_favors_given || 0) + (user?.total_favors_received || 0)} Favors
+                {(displayUser?.total_favors_given || 0) + (displayUser?.total_favors_received || 0)} Favors
               </Text>
             </View>
             <Text style={styles.leafIcon}>🍃</Text>
@@ -165,9 +254,7 @@ export default function ProfileScreen() {
         {/* Testimonials */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Notes of Thanks</Text>
-          {loading ? (
-            <ActivityIndicator size="large" color="#3c6a35" style={{ marginVertical: 20 }} />
-          ) : reviews.length > 0 ? (
+          {reviews.length > 0 ? (
             <>
               {reviews.map((review) => (
                 <View key={review.id} style={styles.testimonialCard}>
@@ -203,11 +290,11 @@ export default function ProfileScreen() {
           <Text style={styles.sectionTitle}>Contact</Text>
           <View style={styles.contactCard}>
             <Text style={styles.contactLabel}>Phone</Text>
-            <Text style={styles.contactValue}>{user?.phone_number}</Text>
+            <Text style={styles.contactValue}>{displayUser?.phone_number}</Text>
           </View>
           <View style={styles.contactCard}>
             <Text style={styles.contactLabel}>Email</Text>
-            <Text style={styles.contactValue}>{user?.email}</Text>
+            <Text style={styles.contactValue}>{displayUser?.email}</Text>
           </View>
         </View>
 
@@ -218,6 +305,101 @@ export default function ProfileScreen() {
 
         <View style={{ height: 20 }} />
       </ScrollView>
+
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={editModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closeEditModal}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardAvoidingView}
+        >
+          <SafeAreaView style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={closeEditModal}>
+                <Text style={styles.modalCloseButton}>✕</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Edit Profile</Text>
+              <View style={{ width: 24 }} />
+            </View>
+
+            <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
+              {/* First Name */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>First Name</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter first name"
+                  value={editFirstName}
+                  onChangeText={setEditFirstName}
+                  placeholderTextColor="#b0a89e"
+                />
+              </View>
+
+              {/* Last Name */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Last Name</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter last name"
+                  value={editLastName}
+                  onChangeText={setEditLastName}
+                  placeholderTextColor="#b0a89e"
+                />
+              </View>
+
+              {/* Bio */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Bio</Text>
+                <TextInput
+                  style={[styles.input, styles.bioInput]}
+                  placeholder="Tell us about yourself"
+                  value={editBio}
+                  onChangeText={setEditBio}
+                  multiline={true}
+                  numberOfLines={4}
+                  placeholderTextColor="#b0a89e"
+                  textAlignVertical="top"
+                />
+              </View>
+
+              {/* Error Message */}
+              {editError && (
+                <View style={styles.errorBox}>
+                  <Text style={styles.errorText}>{editError}</Text>
+                </View>
+              )}
+
+              {/* Save Button */}
+              <TouchableOpacity
+                style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+                onPress={saveProfile}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.saveButtonText}>Save Changes</Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Cancel Button */}
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={closeEditModal}
+                disabled={saving}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <View style={{ height: 20 }} />
+            </ScrollView>
+          </SafeAreaView>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -486,5 +668,117 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
+  },
+  editButton: {
+    marginTop: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    backgroundColor: '#3c6a35',
+    borderRadius: 8,
+  },
+  editButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#fafaf0',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e5d8',
+  },
+  modalCloseButton: {
+    fontSize: 24,
+    color: '#303429',
+    fontWeight: '600',
+    width: 24,
+    height: 24,
+    textAlign: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#303429',
+  },
+  modalContent: {
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+  },
+  formGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#797c6f',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  input: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#303429',
+    borderWidth: 1,
+    borderColor: '#e5e5d8',
+  },
+  bioInput: {
+    paddingTop: 12,
+    paddingBottom: 12,
+    minHeight: 100,
+  },
+  errorBox: {
+    backgroundColor: '#fee2e2',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#dc2626',
+  },
+  errorText: {
+    color: '#991b1b',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  saveButton: {
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: '#3c6a35',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  cancelButton: {
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: '#f0f0e8',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#303429',
   },
 });
