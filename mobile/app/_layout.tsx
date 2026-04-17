@@ -13,7 +13,7 @@ export default function RootLayout() {
       await hydrateAuth();
     };
     initAuth();
-  }, [hydrateAuth]);
+  }, []);
 
   if (isLoading) {
     return (
@@ -25,14 +25,16 @@ export default function RootLayout() {
 
   return (
     <>
-      <Stack screenOptions={{ headerShown: false }}>
-        {isSignedIn ? (
-          <Stack.Screen name="(app)" options={{ headerShown: false }} />
-        ) : (
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        )}
-      </Stack>
       <StatusBar style="dark" />
+      {isSignedIn ? (
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(app)" options={{ headerShown: false }} />
+        </Stack>
+      ) : (
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        </Stack>
+      )}
     </>
   );
 }

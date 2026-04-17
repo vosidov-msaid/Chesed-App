@@ -1,8 +1,9 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional
 from datetime import datetime
 from uuid import UUID
 from app.models.user import UserRole
+import re
 
 
 class UserBase(BaseModel):
@@ -12,9 +13,31 @@ class UserBase(BaseModel):
     email: Optional[EmailStr] = None
     role: UserRole = UserRole.BOTH
 
+    @field_validator('phone_number')
+    @classmethod
+    def validate_phone_number(cls, v: str) -> str:
+        """Validate phone number: only digits and + prefix allowed."""
+        if not re.match(r'^\+?[0-9]{10,20}$', v):
+            raise ValueError('Phone number must contain only digits and optional + prefix. Example: +1234567890 or 1234567890')
+        return v
+
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8)
+
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        """Validate password strength: at least 8 chars with uppercase, lowercase, and digit."""
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters long')
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        if not re.search(r'[0-9]', v):
+            raise ValueError('Password must contain at least one digit')
+        return v
 
 
 class UserUpdate(BaseModel):
@@ -39,3 +62,4 @@ class UserResponse(UserBase):
 
     class Config:
         from_attributes = True
+

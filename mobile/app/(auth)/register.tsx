@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
+import { validatePhone, validatePassword, validateEmail } from '../../utils/validation';
+import { ValidationFeedback, PasswordRequirement, PasswordStrengthBar } from '../../components/ValidationFeedback';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -13,20 +15,48 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  const handleRegister = async () => {
-    if (!phoneNumber || !firstName || !lastName || !email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
+  // Live validation states
+  const phoneValidation = validatePhone(phoneNumber);
+  const passwordValidation = validatePassword(password);
+  const emailIsValid = validateEmail(email);
+  const passwordsMatch = password && confirmPassword && password === confirmPassword;
 
-    if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+  // Calculate password strength
+  const getPasswordStrength = () => {
+    const checks = [
+      passwordValidation.hasMinLength,
+      passwordValidation.hasUppercase,
+      passwordValidation.hasLowercase,
+      passwordValidation.hasDigit,
+    ].filter(Boolean).length;
+
+    if (checks <= 1) return 'weak';
+    if (checks === 2) return 'fair';
+    if (checks === 3) return 'good';
+    return 'strong';
+  };
+
+  const isFormValid =
+    phoneValidation.isValid &&
+    firstName.trim().length > 0 &&
+    lastName.trim().length > 0 &&
+    emailIsValid &&
+    passwordValidation.isValid &&
+    passwordsMatch;
+
+  const handleRegister = async () => {
+    if (!isFormValid) {
+      Alert.alert('Validation Error', 'Please fix all errors before proceeding');
       return;
     }
 
     try {
       await register(phoneNumber, firstName, lastName, email, password);
-      router.replace('/(app)');
+      Alert.alert(
+        'Registration Successful',
+        'Check your email to verify your account before logging in.'
+      );
+      router.replace('/(auth)/login');
     } catch {
       Alert.alert('Registration Failed', error || 'Please try again');
     }
@@ -46,7 +76,7 @@ export default function RegisterScreen() {
         </View>
 
         {/* Phone Input */}
-        <View style={{ marginBottom: 16 }}>
+        <View style={{ marginBottom: 20 }}>
           <Text style={{ fontSize: 12, fontWeight: '600', color: '#303429', marginBottom: 8 }}>
             Phone Number
           </Text>
@@ -54,7 +84,9 @@ export default function RegisterScreen() {
             style={{
               height: 48,
               borderRadius: 12,
-              backgroundColor: '#f4f4e9',
+              backgroundColor: phoneNumber && !phoneValidation.isValid ? '#ffe6e0' : '#f4f4e9',
+              borderWidth: phoneNumber && !phoneValidation.isValid ? 1 : 0,
+              borderColor: phoneValidation.isValid && phoneNumber ? '#2f7d3f' : '#a73b21',
               paddingHorizontal: 16,
               fontSize: 16,
               color: '#303429',
@@ -66,6 +98,17 @@ export default function RegisterScreen() {
             editable={!isLoading}
             keyboardType="phone-pad"
           />
+          {phoneNumber && (
+            <>
+              {phoneValidation.isValid ? (
+                <ValidationFeedback isValid message="✓ Valid phone number" />
+              ) : (
+                phoneValidation.errors.map((e, idx) => (
+                  <ValidationFeedback key={idx} isValid={false} message={`✗ ${e}`} />
+                ))
+              )}
+            </>
+          )}
         </View>
 
         {/* First Name */}
@@ -113,7 +156,7 @@ export default function RegisterScreen() {
         </View>
 
         {/* Email */}
-        <View style={{ marginBottom: 16 }}>
+        <View style={{ marginBottom: 20 }}>
           <Text style={{ fontSize: 12, fontWeight: '600', color: '#303429', marginBottom: 8 }}>
             Email
           </Text>
@@ -121,7 +164,9 @@ export default function RegisterScreen() {
             style={{
               height: 48,
               borderRadius: 12,
-              backgroundColor: '#f4f4e9',
+              backgroundColor: email && !emailIsValid ? '#ffe6e0' : '#f4f4e9',
+              borderWidth: email && !emailIsValid ? 1 : 0,
+              borderColor: emailIsValid && email ? '#2f7d3f' : '#a73b21',
               paddingHorizontal: 16,
               fontSize: 16,
               color: '#303429',
@@ -133,10 +178,13 @@ export default function RegisterScreen() {
             editable={!isLoading}
             keyboardType="email-address"
           />
+          {email && (
+            <ValidationFeedback isValid={emailIsValid} message={emailIsValid ? '✓ Valid email' : '✗ Invalid email'} />
+          )}
         </View>
 
         {/* Password */}
-        <View style={{ marginBottom: 16 }}>
+        <View style={{ marginBottom: 20 }}>
           <Text style={{ fontSize: 12, fontWeight: '600', color: '#303429', marginBottom: 8 }}>
             Password
           </Text>
@@ -144,18 +192,29 @@ export default function RegisterScreen() {
             style={{
               height: 48,
               borderRadius: 12,
-              backgroundColor: '#f4f4e9',
+              backgroundColor: password && !passwordValidation.isValid ? '#ffe6e0' : '#f4f4e9',
+              borderWidth: password && !passwordValidation.isValid ? 1 : 0,
+              borderColor: passwordValidation.isValid && password ? '#2f7d3f' : '#a73b21',
               paddingHorizontal: 16,
               fontSize: 16,
               color: '#303429',
             }}
-            placeholder="Enter password"
+            placeholder="Enter password (min 8 chars)"
             placeholderTextColor="#b1b3a5"
             secureTextEntry
             value={password}
             onChangeText={setPassword}
             editable={!isLoading}
           />
+          {password && (
+            <View>
+              <PasswordStrengthBar strength={getPasswordStrength()} />
+              <PasswordRequirement met={passwordValidation.hasMinLength} label="Minimum 8 characters" />
+              <PasswordRequirement met={passwordValidation.hasUppercase} label="One uppercase letter (A-Z)" />
+              <PasswordRequirement met={passwordValidation.hasLowercase} label="One lowercase letter (a-z)" />
+              <PasswordRequirement met={passwordValidation.hasDigit} label="One digit (0-9)" />
+            </View>
+          )}
         </View>
 
         {/* Confirm Password */}
@@ -167,7 +226,10 @@ export default function RegisterScreen() {
             style={{
               height: 48,
               borderRadius: 12,
-              backgroundColor: '#f4f4e9',
+              backgroundColor:
+                confirmPassword && !passwordsMatch ? '#ffe6e0' : '#f4f4e9',
+              borderWidth: confirmPassword && !passwordsMatch ? 1 : 0,
+              borderColor: passwordsMatch && confirmPassword ? '#2f7d3f' : '#a73b21',
               paddingHorizontal: 16,
               fontSize: 16,
               color: '#303429',
@@ -179,6 +241,9 @@ export default function RegisterScreen() {
             onChangeText={setConfirmPassword}
             editable={!isLoading}
           />
+          {confirmPassword && (
+            <ValidationFeedback isValid={passwordsMatch} message={passwordsMatch ? '✓ Passwords match' : '✗ Passwords do not match'} />
+          )}
         </View>
 
         {/* Error Message */}
@@ -193,13 +258,13 @@ export default function RegisterScreen() {
           style={{
             height: 48,
             borderRadius: 12,
-            backgroundColor: '#3c6a35',
+            backgroundColor: isFormValid ? '#3c6a35' : '#b1b3a5',
             justifyContent: 'center',
             alignItems: 'center',
             marginBottom: 16,
           }}
           onPress={handleRegister}
-          disabled={isLoading}
+          disabled={isLoading || !isFormValid}
         >
           {isLoading ? (
             <ActivityIndicator color="#fff" />

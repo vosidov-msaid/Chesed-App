@@ -1,8 +1,13 @@
 import axios, { AxiosInstance } from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
 const TOKEN_KEY = 'chesed_access_token';
+
+// SecureStore is not available on web, so use AsyncStorage as fallback
+const isSecureStoreAvailable = Platform.OS !== 'web';
 
 class ApiClient {
   private api: AxiosInstance;
@@ -10,6 +15,7 @@ class ApiClient {
   private refreshSubscribers: ((token: string) => void)[] = [];
 
   constructor() {
+    console.log('[API] Initializing with URL:', API_URL);
     this.api = axios.create({
       baseURL: API_URL,
       timeout: 10000,
@@ -23,14 +29,19 @@ class ApiClient {
       const token = await this.getAccessToken();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+        console.log('[API] Token added to request:', config.url);
       }
       return config;
     });
 
     // Handle token refresh on 401
     this.api.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        console.log('[API] Response success:', response.status, response.config.url);
+        return response;
+      },
       async (error) => {
+        console.error('[API] Response error:', error.response?.status, error.config?.url, error.response?.data);
         const originalRequest = error.config;
 
         if (error.response?.status === 401 && !originalRequest._retry) {
@@ -65,14 +76,36 @@ class ApiClient {
   }
 
   async login(phoneNumber: string, password: string) {
-    const response = await this.api.post('/auth/login', {
-      phone_number: phoneNumber,
-      password,
-    });
+    console.log('[API] Logging in with phone:', phoneNumber);
+    try {
+      const response = await this.api.post('/auth/login', {
+        phone_number: phoneNumber,
+        password,
+      });
 
-    const { access_token, user_id, first_name, last_name } = response.data;
-    await SecureStore.setItemAsync(TOKEN_KEY, access_token);
-    return { access_token, user_id, first_name, last_name };
+      console.log('[API] Login response received, status:', response.status);
+      console.log('[API] Response data keys:', Object.keys(response.data));
+      
+      const { access_token, user_id, first_name, last_name } = response.data;
+      
+      console.log('[API] Extracted token:', access_token ? 'YES' : 'NO');
+      console.log('[API] Extracted user_id:', user_id);
+      
+      if (!access_token) {
+        throw new Error('No access_token in login response');
+      }
+
+      console.log('[API] Calling setAccessToken()...');
+      await this.setAccessToken(access_token);
+      console.log('[API] Token stored successfully');
+      
+      return { access_token, user_id, first_name, last_name };
+    } catch (error: any) {
+      console.error('[API] Login caught error:', error.message);
+      console.error('[API] Error response status:', error.response?.status);
+      console.error('[API] Error response data:', error.response?.data);
+      throw error;
+    }
   }
 
   async register(
@@ -82,6 +115,7 @@ class ApiClient {
     email: string,
     password: string
   ) {
+    console.log('[API] Registering user:', phoneNumber);
     const response = await this.api.post('/users/register', {
       phone_number: phoneNumber,
       first_name: firstName,
@@ -91,34 +125,73 @@ class ApiClient {
       role: 'both',
     });
 
+    console.log('[API] Registration successful');
     return response.data;
   }
 
   async getCurrentUser() {
+    console.log('[API] Fetching current user');
     const response = await this.api.get('/auth/me');
+    console.log('[API] Current user fetched:', response.data.phone_number);
     return response.data;
   }
 
   async getAccessToken(): Promise<string | null> {
     try {
-      return await SecureStore.getItemAsync(TOKEN_KEY);
-    } catch {
+      console.log('[SecureStore] Getting token...');
+      let token: string | null = null;
+      
+      if (isSecureStoreAvailable) {
+        token = await SecureStore.getItemAsync(TOKEN_KEY);
+      } else {
+        token = await AsyncStorage.getItem(TOKEN_KEY);
+      }
+      
+      console.log('[SecureStore] Token retrieved:', token ? 'YES' : 'NO');
+      return token;
+    } catch (error) {
+      console.error('[SecureStore] Error getting token:', error);
       return null;
+    }
+  }
+
+  async setAccessToken(token: string): Promise<void> {
+    try {
+      console.log('[SecureStore] Setting token...');
+      
+      if (isSecureStoreAvailable) {
+        await SecureStore.setItemAsync(TOKEN_KEY, token);
+      } else {
+        await AsyncStorage.setItem(TOKEN_KEY, token);
+      }
+      
+      console.log('[SecureStore] Token set successfully');
+    } catch (error) {
+      console.error('[SecureStore] Error setting token:', error);
+      throw error;
     }
   }
 
   async refreshAccessToken(): Promise<string> {
     const response = await this.api.post('/auth/token');
     const { access_token } = response.data;
-    await SecureStore.setItemAsync(TOKEN_KEY, access_token);
+    await this.setAccessToken(access_token);
     return access_token;
   }
 
   async clearTokens() {
     try {
-      await SecureStore.deleteItemAsync(TOKEN_KEY);
-    } catch {
-      // Token may not exist
+      console.log('[SecureStore] Clearing token...');
+      
+      if (isSecureStoreAvailable) {
+        await SecureStore.deleteItemAsync(TOKEN_KEY);
+      } else {
+        await AsyncStorage.removeItem(TOKEN_KEY);
+      }
+      
+      console.log('[SecureStore] Token cleared');
+    } catch (error) {
+      console.error('[SecureStore] Error clearing token:', error);
     }
   }
 
