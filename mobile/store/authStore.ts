@@ -119,7 +119,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       
     } catch (error: any) {
       set({
-        error: getErrorMessage(error?.response?.data || error),
+        error: "Invalid phone number or password",
         isLoading: false,
         isSignedIn: false,
       });
