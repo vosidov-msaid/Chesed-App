@@ -9,6 +9,7 @@ from app.models import User, EmailVerification
 from app.schemas.auth import (
     LoginRequest,
     LoginResponse,
+    LoginPendingVerificationResponse,
     TokenResponse,
     SendVerificationEmailRequest,
     VerifyEmailRequest,
@@ -27,15 +28,15 @@ from app.services.email_service import get_email_service
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/login", response_model=LoginResponse)
+@router.post("/login")
 async def login(
     credentials: LoginRequest,
     db: AsyncSession = Depends(get_db_session),
-) -> LoginResponse:
+):
     """
     Login with phone number and password.
-    Returns access token and user information.
-    User must have verified their email before login.
+    Returns access token and user information if email is verified.
+    If email verification is enabled and user hasn't verified, returns pending verification message with 200 OK.
     """
     # Find user by phone number
     stmt = select(User).where(User.phone_number == credentials.phone_number)
@@ -63,9 +64,13 @@ async def login(
 
     # Check if email is verified (if verification is enabled)
     if settings.email_verification_enabled and not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Please verify your email before logging in. Check your email for the verification link.",
+        # Return 200 OK with pending verification message instead of 403 error
+        return LoginPendingVerificationResponse(
+            message="Please verify your email before logging in. Check your email for the verification link.",
+            is_verified=False,
+            user_id=str(user.id),
+            first_name=user.first_name,
+            last_name=user.last_name,
         )
 
     # Create access token

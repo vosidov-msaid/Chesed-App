@@ -51,31 +51,17 @@ export default function RegisterScreen() {
       return;
     }
 
-    try {
-      await register(phoneNumber, firstName, lastName, email, password);
-      Alert.alert(
-        'Registration Successful',
-        'Check your email to verify your account before logging in.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.replace('/(auth)/login'),
-          },
-        ]
-      );
-    } catch (err: any) {
-      const errorMsg = err?.response?.data?.detail || err?.message || 'Registration failed';
-      Alert.alert('Registration Failed', errorMsg, [
-        {
-          text: 'OK',
-          onPress: () => router.replace('/(auth)/login'),
-        },
-      ]);
-    }
+    await register(phoneNumber, firstName, lastName, email, password);
   };
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: '#fafaf0' }}>
+    <ScrollView 
+      style={{ flex: 1, backgroundColor: '#fafaf0' }}
+      contentContainerStyle={{ paddingBottom: 40 }}
+      scrollEnabled={true}
+      showsVerticalScrollIndicator={false}
+      keyboardDismissMode="on-drag"
+    >
       <View style={{ padding: 24 }}>
         {/* Header */}
         <View style={{ marginTop: 40, marginBottom: 32 }}>
@@ -235,13 +221,6 @@ export default function RegisterScreen() {
           )}
         </View>
 
-        {/* Error Message */}
-        {error && (
-          <Text style={{ color: '#a73b21', marginBottom: 16, fontSize: 14 }}>
-            {error}
-          </Text>
-        )}
-
         {/* Register Button */}
         <TouchableOpacity
           style={{
@@ -250,7 +229,7 @@ export default function RegisterScreen() {
             backgroundColor: isFormValid ? '#3c6a35' : '#b1b3a5',
             justifyContent: 'center',
             alignItems: 'center',
-            marginBottom: 16,
+            marginBottom: error ? 12 : 16,
           }}
           onPress={handleRegister}
           disabled={isLoading || !isFormValid}
@@ -263,6 +242,13 @@ export default function RegisterScreen() {
             </Text>
           )}
         </TouchableOpacity>
+
+        {/* Error Message */}
+        {error && typeof error === 'string' && (
+          <Text style={{ color: '#a73b21', marginBottom: 16, fontSize: 14, textAlign: 'center' }}>
+            {error}
+          </Text>
+        )}
 
         {/* Login Link */}
         <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 24 }}>

@@ -42,6 +42,14 @@ class LoginResponse(BaseModel):
     last_name: str
 
 
+class LoginPendingVerificationResponse(BaseModel):
+    message: str
+    is_verified: bool = False
+    user_id: str
+    first_name: str
+    last_name: str
+
+
 class SendVerificationEmailRequest(BaseModel):
     email: EmailStr
 

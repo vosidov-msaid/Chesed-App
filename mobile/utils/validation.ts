@@ -39,8 +39,8 @@ export function validatePhone(phone: string): PhoneValidation {
     errors.push('Minimum 10 digits required');
   }
 
-  if (digits.length > 20) {
-    errors.push('Maximum 20 digits allowed');
+  if (digits.length > 15) {
+    errors.push('Maximum 15 digits allowed');
   }
 
   return {

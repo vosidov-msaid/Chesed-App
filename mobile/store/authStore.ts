@@ -1,6 +1,38 @@
 import { create } from 'zustand';
 import api from '../services/api';
 
+// Helper to extract error message from various error formats
+const getErrorMessage = (error: any): string => {
+  // If it's a string, return it
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  // If it's an array (Pydantic validation errors), extract first error's message
+  if (Array.isArray(error)) {
+    const firstError = error[0];
+    if (typeof firstError === 'string') return firstError;
+    if (firstError?.msg) return firstError.msg;
+    return 'Validation error';
+  }
+
+  // If it's an object with detail property
+  if (error?.detail) {
+    // If detail is an array, get first message
+    if (Array.isArray(error.detail)) {
+      const firstError = error.detail[0];
+      if (typeof firstError === 'string') return firstError;
+      if (firstError?.msg) return firstError.msg;
+      return 'Validation error';
+    }
+    // If detail is a string, return it
+    return String(error.detail);
+  }
+
+  // Fallback
+  return error?.message || 'An error occurred';
+};
+
 export interface User {
   id: string;
   phone_number: string;
@@ -42,93 +74,109 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: async (phoneNumber, password) => {
     set({ isLoading: true, error: null });
-    console.log('[Auth] Starting login...');
     
     try {
-      console.log('[Auth] Calling api.login()...');
       const result = await api.login(phoneNumber, password);
-      console.log('[Auth] api.login() succeeded, received:', Object.keys(result));
       
-      // Mark as signed in immediately - LOGIN IS SUCCESSFUL AT THIS POINT
-      console.log('[Auth] Setting isSignedIn = true');
-      set({
-        isSignedIn: true,
-        isLoading: false,
-        error: null,
-      });
-      console.log('[Auth] Login complete, user can now navigate to (app)');
+      // Check if login response has access_token (successful login)
+      if (result.access_token) {
+        // Login successful - mark as signed in
+        set({
+          isSignedIn: true,
+          isLoading: false,
+          error: null,
+        });
 
-      // Fetch full user data in background - don't let this block login
-      setTimeout(async () => {
-        try {
-          console.log('[Auth] Background: Fetching current user data...');
-          const user = await api.getCurrentUser();
-          console.log('[Auth] Background: User data fetched successfully');
-          set({ user });
-        } catch (userError: any) {
-          console.error('[Auth] Background: Failed to fetch user data:', userError.message);
-          // Silently fail - user is already logged in with valid token
-        }
-      }, 0);
+        // Fetch full user data in background - don't let this block login
+        setTimeout(async () => {
+          try {
+            const user = await api.getCurrentUser();
+            set({ user });
+          } catch (userError: any) {
+            // Silently fail - user is already logged in with valid token
+          }
+        }, 0);
+      } else if (result.message && result.message.toLowerCase().includes('verify')) {
+        // Email verification pending - this is not an error, just a message
+        set({
+          isLoading: false,
+          error: result.message,
+          isSignedIn: false,
+        });
+      } else {
+        // Unexpected response - no token and no message
+        set({
+          isLoading: false,
+          error: 'Unexpected login response',
+          isSignedIn: false,
+        });
+      }
       
     } catch (error: any) {
-      console.error('[Auth] Login FAILED:', error.message);
       set({
-        error: error?.response?.data?.detail || error.message || 'Login failed',
+        error: getErrorMessage(error?.response?.data || error),
         isLoading: false,
         isSignedIn: false,
       });
-      throw error;
     }
   },
 
   register: async (phoneNumber, firstName, lastName, email, password) => {
     set({ isLoading: true, error: null });
     try {
-      console.log('[Auth] Starting registration');
       await api.register(phoneNumber, firstName, lastName, email, password);
-      console.log('[Auth] Registration successful, logging in...');
 
-      // Auto-login after registration
-      await api.login(phoneNumber, password);
-      console.log('[Auth] Auto-login successful after registration');
-
-      set({
-        isSignedIn: true,
-        isLoading: false,
-      });
-
-      // Fetch user data
+      // Try to auto-login after registration
       try {
-        const user = await api.getCurrentUser();
-        set({ user });
-      } catch (userError: any) {
-        console.error('[Auth] Failed to fetch user after registration:', userError);
-        // Still signed in, just don't have full user data yet
+        const loginResponse = await api.login(phoneNumber, password);
+        
+        // Check if login response has access_token (successful login)
+        if (loginResponse.access_token) {
+          set({
+            isSignedIn: true,
+            isLoading: false,
+          });
+
+          // Fetch user data
+          try {
+            const user = await api.getCurrentUser();
+            set({ user });
+          } catch (userError: any) {
+            // Silently fail
+          }
+        } else if (loginResponse.message && loginResponse.message.toLowerCase().includes('verify')) {
+          // Email verification pending
+          set({ isLoading: false });
+          throw new Error(loginResponse.message);
+        }
+      } catch (loginError: any) {
+        // If it's a message about email verification, treat as success
+        const errorMsg = loginError?.message || loginError?.response?.data?.detail || '';
+        if (errorMsg.toLowerCase().includes('verify')) {
+          set({ isLoading: false });
+          throw loginError; // Re-throw with verification message
+        }
+        // Other login errors are actual failures
+        throw loginError;
       }
     } catch (error: any) {
-      console.error('[Auth] Registration failed:', error?.response?.data || error.message);
       set({
-        error: error?.response?.data?.detail || 'Registration failed',
+        error: getErrorMessage(error?.response?.data || error),
         isLoading: false,
       });
-      throw error;
     }
   },
 
   getCurrentUser: async () => {
     set({ isLoading: true });
     try {
-      console.log('[Auth] Fetching current user...');
       const user = await api.getCurrentUser();
-      console.log('[Auth] Current user fetched');
       set({
         user,
         isSignedIn: true,
         isLoading: false,
       });
     } catch (error) {
-      console.error('[Auth] Failed to get current user:', error);
       set({
         user: null,
         isSignedIn: false,
@@ -140,16 +188,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: async () => {
     set({ isLoading: true });
     try {
-      console.log('[Auth] Logging out...');
       await api.logout();
-      console.log('[Auth] Logout successful');
       set({
         user: null,
         isSignedIn: false,
         isLoading: false,
       });
     } catch (error: any) {
-      console.error('[Auth] Logout failed:', error);
       set({
         error: error?.message || 'Logout failed',
         isLoading: false,
@@ -162,21 +207,17 @@ export const useAuthStore = create<AuthState>((set) => ({
   hydrateAuth: async () => {
     set({ isLoading: true });
     try {
-      console.log('[Auth] Hydrating auth state...');
       const token = await api.getAccessToken();
-      console.log('[Auth] Token check:', token ? 'Found' : 'Not found');
 
       if (token) {
         try {
           const user = await api.getCurrentUser();
-          console.log('[Auth] Hydration successful, user:', user.phone_number);
           set({
             user,
             isSignedIn: true,
             isLoading: false,
           });
         } catch (error) {
-          console.error('[Auth] Token exists but getCurrentUser failed:', error);
           // Token exists but user fetch failed - clear it and start fresh
           set({
             user: null,
@@ -185,7 +226,6 @@ export const useAuthStore = create<AuthState>((set) => ({
           });
         }
       } else {
-        console.log('[Auth] No token found, user not signed in');
         set({
           user: null,
           isSignedIn: false,
@@ -193,7 +233,6 @@ export const useAuthStore = create<AuthState>((set) => ({
         });
       }
     } catch (error) {
-      console.error('[Auth] Hydration error:', error);
       set({
         user: null,
         isSignedIn: false,

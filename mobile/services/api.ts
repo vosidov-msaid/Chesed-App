@@ -15,7 +15,6 @@ class ApiClient {
   private refreshSubscribers: ((token: string) => void)[] = [];
 
   constructor() {
-    console.log('[API] Initializing with URL:', API_URL);
     this.api = axios.create({
       baseURL: API_URL,
       timeout: 10000,
@@ -29,19 +28,14 @@ class ApiClient {
       const token = await this.getAccessToken();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
-        console.log('[API] Token added to request:', config.url);
       }
       return config;
     });
 
     // Handle token refresh on 401
     this.api.interceptors.response.use(
-      (response) => {
-        console.log('[API] Response success:', response.status, response.config.url);
-        return response;
-      },
+      (response) => response,
       async (error) => {
-        console.error('[API] Response error:', error.response?.status, error.config?.url, error.response?.data);
         const originalRequest = error.config;
 
         // Don't try to refresh if the failed request was already a token refresh attempt
@@ -77,34 +71,24 @@ class ApiClient {
   }
 
   async login(phoneNumber: string, password: string) {
-    console.log('[API] Logging in with phone:', phoneNumber);
     try {
       const response = await this.api.post('/auth/login', {
         phone_number: phoneNumber,
         password,
       });
 
-      console.log('[API] Login response received, status:', response.status);
-      console.log('[API] Response data keys:', Object.keys(response.data));
-      
       const { access_token, user_id, first_name, last_name } = response.data;
       
-      console.log('[API] Extracted token:', access_token ? 'YES' : 'NO');
-      console.log('[API] Extracted user_id:', user_id);
-      
-      if (!access_token) {
+      if (!access_token && !response.data.message) {
         throw new Error('No access_token in login response');
       }
 
-      console.log('[API] Calling setAccessToken()...');
-      await this.setAccessToken(access_token);
-      console.log('[API] Token stored successfully');
+      if (access_token) {
+        await this.setAccessToken(access_token);
+      }
       
-      return { access_token, user_id, first_name, last_name };
+      return { access_token, user_id, first_name, last_name, ...response.data };
     } catch (error: any) {
-      console.error('[API] Login caught error:', error.message);
-      console.error('[API] Error response status:', error.response?.status);
-      console.error('[API] Error response data:', error.response?.data);
       throw error;
     }
   }
@@ -116,7 +100,6 @@ class ApiClient {
     email: string,
     password: string
   ) {
-    console.log('[API] Registering user:', phoneNumber);
     const response = await this.api.post('/users/register', {
       phone_number: phoneNumber,
       first_name: firstName,
@@ -126,20 +109,16 @@ class ApiClient {
       role: 'both',
     });
 
-    console.log('[API] Registration successful');
     return response.data;
   }
 
   async getCurrentUser() {
-    console.log('[API] Fetching current user');
     const response = await this.api.get('/auth/me');
-    console.log('[API] Current user fetched:', response.data.phone_number);
     return response.data;
   }
 
   async getAccessToken(): Promise<string | null> {
     try {
-      console.log('[SecureStore] Getting token...');
       let token: string | null = null;
       
       if (isSecureStoreAvailable) {
@@ -148,42 +127,31 @@ class ApiClient {
         token = await AsyncStorage.getItem(TOKEN_KEY);
       }
       
-      console.log('[SecureStore] Token retrieved:', token ? 'YES' : 'NO');
       return token;
     } catch (error) {
-      console.error('[SecureStore] Error getting token:', error);
       return null;
     }
   }
 
   async setAccessToken(token: string): Promise<void> {
     try {
-      console.log('[SecureStore] Setting token...');
-      
       if (isSecureStoreAvailable) {
         await SecureStore.setItemAsync(TOKEN_KEY, token);
       } else {
         await AsyncStorage.setItem(TOKEN_KEY, token);
       }
-      
-      console.log('[SecureStore] Token set successfully');
     } catch (error) {
-      console.error('[SecureStore] Error setting token:', error);
       throw error;
     }
   }
 
   async refreshAccessToken(): Promise<string> {
     try {
-      console.log('[API] Attempting token refresh...');
       const response = await this.api.post('/auth/token');
       const { access_token } = response.data;
-      console.log('[API] Token refreshed successfully');
       await this.setAccessToken(access_token);
       return access_token;
     } catch (error: any) {
-      console.error('[API] Token refresh failed:', error.response?.status, error.message);
-      // If token refresh fails (401, etc), clear the invalid token
       await this.clearTokens();
       throw error;
     }
@@ -191,17 +159,13 @@ class ApiClient {
 
   async clearTokens() {
     try {
-      console.log('[SecureStore] Clearing token...');
-      
       if (isSecureStoreAvailable) {
         await SecureStore.deleteItemAsync(TOKEN_KEY);
       } else {
         await AsyncStorage.removeItem(TOKEN_KEY);
       }
-      
-      console.log('[SecureStore] Token cleared');
     } catch (error) {
-      console.error('[SecureStore] Error clearing token:', error);
+      // Silently fail
     }
   }
 

@@ -2,50 +2,26 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
-import { validatePhone, validatePassword } from '../../utils/validation';
-import { ValidationFeedback } from '../../components/ValidationFeedback';
+import { validatePhone } from '../../utils/validation';
 import PhoneNumberInput from '../../components/PhoneNumberInput';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, isLoading, error: authError, clearError } = useAuthStore();
+  const { login, isLoading, error } = useAuthStore();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
 
   // Live validation states
   const phoneValidation = validatePhone(phoneNumber);
-  const passwordValidation = validatePassword(password);
-
-  const isFormValid = phoneValidation.isValid && passwordValidation.isValid;
+  const isFormValid = phoneValidation.isValid && password.trim().length > 0;
 
   const handleLogin = async () => {
-    clearError();
-
     if (!isFormValid) {
       Alert.alert('Validation Error', 'Please fix all validation errors');
       return;
     }
 
-    try {
-      console.log('[LoginScreen] Attempting login...');
-      await login(phoneNumber, password);
-      console.log('[LoginScreen] Login successful, waiting for navigation...');
-      // Don't set error or navigate manually - isSignedIn state change will trigger navigation
-    } catch (error: any) {
-      console.error('[LoginScreen] Login error:', error);
-      const errorMsg = error?.response?.data?.detail || error?.message || 'Login failed';
-      Alert.alert('Login Failed', errorMsg, [
-        {
-          text: 'OK',
-          onPress: () => {
-            // Reset form and clear errors
-            setPhoneNumber('');
-            setPassword('');
-            clearError();
-          },
-        },
-      ]);
-    }
+    await login(phoneNumber, password);
   };
 
   return (
@@ -82,9 +58,7 @@ export default function LoginScreen() {
           style={{
             height: 48,
             borderRadius: 12,
-            backgroundColor: password && !passwordValidation.isValid ? '#ffe6e0' : '#f4f4e9',
-            borderWidth: password && !passwordValidation.isValid ? 1 : 0,
-            borderColor: passwordValidation.isValid && password ? '#2f7d3f' : '#a73b21',
+            backgroundColor: '#f4f4e9',
             paddingHorizontal: 16,
             fontSize: 16,
             color: '#303429',
@@ -96,32 +70,6 @@ export default function LoginScreen() {
           onChangeText={setPassword}
           editable={!isLoading}
         />
-        {password && (
-          <View>
-            {passwordValidation.isValid ? (
-              <ValidationFeedback isValid message="✓ Strong password" />
-            ) : (
-              <View>
-                <ValidationFeedback
-                  isValid={passwordValidation.hasMinLength}
-                  message={`${passwordValidation.hasMinLength ? '✓' : '✗'} Minimum 8 characters`}
-                />
-                <ValidationFeedback
-                  isValid={passwordValidation.hasUppercase}
-                  message={`${passwordValidation.hasUppercase ? '✓' : '✗'} One uppercase letter`}
-                />
-                <ValidationFeedback
-                  isValid={passwordValidation.hasLowercase}
-                  message={`${passwordValidation.hasLowercase ? '✓' : '✗'} One lowercase letter`}
-                />
-                <ValidationFeedback
-                  isValid={passwordValidation.hasDigit}
-                  message={`${passwordValidation.hasDigit ? '✓' : '✗'} One digit`}
-                />
-              </View>
-            )}
-          </View>
-        )}
       </View>
 
       {/* Login Button */}
@@ -132,7 +80,7 @@ export default function LoginScreen() {
           backgroundColor: isFormValid && !isLoading ? '#3c6a35' : '#b1b3a5',
           justifyContent: 'center',
           alignItems: 'center',
-          marginBottom: 16,
+          marginBottom: error ? 12 : 16,
         }}
         onPress={handleLogin}
         disabled={isLoading || !isFormValid}
@@ -145,6 +93,13 @@ export default function LoginScreen() {
           </Text>
         )}
       </TouchableOpacity>
+
+      {/* Error Message */}
+      {error && typeof error === 'string' && (
+        <Text style={{ color: '#a73b21', marginBottom: 16, fontSize: 14, textAlign: 'center' }}>
+          {error}
+        </Text>
+      )}
 
       {/* Register Link */}
       <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 24 }}>
