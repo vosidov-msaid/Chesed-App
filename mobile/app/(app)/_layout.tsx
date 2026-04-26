@@ -60,27 +60,13 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
-        name="nearby"
+        name="post"
         options={{
-          title: 'Nearby Requests',
-          tabBarLabel: 'Nearby',
+          title: 'Post',
+          tabBarLabel: 'Post',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
-              name={focused ? 'location' : 'location-outline'}
-              size={24}
-              color={color}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="my-requests"
-        options={{
-          title: 'My Requests',
-          tabBarLabel: 'My Requests',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? 'list' : 'list-outline'}
+              name={focused ? 'add-circle' : 'add-circle-outline'}
               size={24}
               color={color}
             />

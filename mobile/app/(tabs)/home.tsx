@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import api from '../../services/api';
 
 interface Request {
@@ -15,16 +16,50 @@ interface Request {
   title: string;
   description: string;
   category: string;
+  cluster: string;
   location_name: string;
-  status: string;
+  distance?: number;
   urgency: string;
-  created_at: string;
-  requester_id: string;
+  scheduled_date?: string;
+  status: string;
+}
+
+interface CommunityWin {
+  id: string;
+  userName: string;
+  helperName: string;
+  action: string;
+  time: string;
+  testimonial: string;
 }
 
 const ITEMS_PER_PAGE = 10;
 
+// Map clusters to colors
+const CLUSTER_COLORS: { [key: string]: string } = {
+  mobility: '#4b6368',
+  errands: '#3c6a35',
+  food: '#865406',
+  borrow: '#5d3800',
+  care: '#376430',
+  muscle: '#694000',
+  presence: '#475f64',
+  skills: '#5a3f35',
+};
+
+const CLUSTER_ICONS: { [key: string]: string } = {
+  mobility: '🚗',
+  errands: '📦',
+  food: '🍲',
+  borrow: '🛠️',
+  care: '👶',
+  muscle: '💪',
+  presence: '🫂',
+  skills: '🔧',
+};
+
 export default function HomeScreen() {
+  const router = useRouter();
   const [requests, setRequests] = useState<Request[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -50,7 +85,6 @@ export default function HomeScreen() {
           setRequests((prev) => [...prev, ...data]);
         }
 
-        // If we got fewer items than requested, we've reached the end
         if (data.length < ITEMS_PER_PAGE) {
           setHasMore(false);
         } else {
@@ -69,19 +103,16 @@ export default function HomeScreen() {
     []
   );
 
-  // Initial load
   useEffect(() => {
     fetchRequests(0);
   }, [fetchRequests]);
 
-  // Handle infinite scroll
   const handleLoadMore = () => {
     if (!isLoadingMore && hasMore) {
       fetchRequests(skip);
     }
   };
 
-  // Handle refresh
   const handleRefresh = () => {
     setRefreshing(true);
     setHasMore(true);
@@ -89,62 +120,123 @@ export default function HomeScreen() {
     fetchRequests(0, true);
   };
 
+  const handleStartRequest = () => {
+    router.push('/post');
+  };
+
+  // Render hero section
+  const renderHero = () => (
+    <View style={styles.heroSection}>
+      <Text style={styles.heroTitle}>Need a Favor?</Text>
+      <Text style={styles.heroSubtitle}>
+        Your community is here to help. Share what you need, and let kindness find its way to you.
+      </Text>
+      <TouchableOpacity
+        style={styles.heroButton}
+        onPress={handleStartRequest}
+      >
+        <Text style={styles.heroButtonText}>Start a New Request</Text>
+        <Text style={styles.heroButtonIcon}>➕</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  // Render section header
+  const renderSectionHeader = () => (
+    <View style={styles.sectionHeader}>
+      <View>
+        <Text style={styles.sectionTitle}>Nearby Help Requests</Text>
+        <Text style={styles.sectionSubtitle}>Active in your circle</Text>
+      </View>
+      <TouchableOpacity>
+        <Text style={styles.filterButton}>Filter</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   // Render request card
   const renderRequestCard = ({ item }: { item: Request }) => {
-    const urgencyColor =
-      item.urgency === 'high'
-        ? '#a73b21'
-        : item.urgency === 'medium'
-          ? '#f59e0b'
-          : '#10b981';
-
-    const statusColor =
-      item.status === 'open'
-        ? '#10b981'
-        : item.status === 'in_progress'
-          ? '#3b82f6'
-          : '#6b7280';
+    const clusterColor = CLUSTER_COLORS[item.cluster] || '#3c6a35';
+    const clusterIcon = CLUSTER_ICONS[item.cluster] || '📌';
+    const distance = item.distance ? `${item.distance} mi away` : 'Near you';
+    const isUrgent = item.urgency === 'high' || item.urgency === 'now';
+    const timing = isUrgent ? 'Now' : item.scheduled_date || 'Scheduled';
 
     return (
-      <TouchableOpacity style={styles.card}>
+      <TouchableOpacity
+        style={[styles.card, { borderLeftColor: clusterColor }]}
+        onPress={() => router.push(`/request/${item.id}`)}
+      >
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>{item.title}</Text>
           <View
             style={[
-              styles.statusBadge,
-              { backgroundColor: statusColor },
+              styles.clusterBadge,
+              { backgroundColor: clusterColor + '20' },
             ]}
           >
-            <Text style={styles.statusText}>{item.status}</Text>
+            <Text style={styles.clusterIcon}>{clusterIcon}</Text>
+            <Text
+              style={[styles.clusterLabel, { color: clusterColor }]}
+              numberOfLines={1}
+            >
+              {item.cluster}
+            </Text>
           </View>
+          <Text style={styles.distance}>{distance}</Text>
         </View>
+
+        <Text style={styles.cardTitle} numberOfLines={2}>
+          {item.title}
+        </Text>
 
         <Text style={styles.cardDescription} numberOfLines={2}>
           {item.description}
         </Text>
 
         <View style={styles.cardFooter}>
-          <View style={styles.categoryTag}>
-            <Text style={styles.categoryText}>{item.category}</Text>
-          </View>
-          <View
-            style={[
-              styles.urgencyTag,
-              { backgroundColor: urgencyColor + '20' },
-            ]}
-          >
-            <Text style={[styles.urgencyText, { color: urgencyColor }]}>
-              {item.urgency}
+          <View style={styles.timingBadge}>
+            <Text style={styles.timingIcon}>
+              {isUrgent ? '⚡' : '📅'}
+            </Text>
+            <Text
+              style={[
+                styles.timingText,
+                isUrgent && { color: '#a73b21', fontWeight: '700' },
+              ]}
+            >
+              {timing}
             </Text>
           </View>
         </View>
 
-        <Text style={styles.locationText}>📍 {item.location_name}</Text>
+        <TouchableOpacity style={styles.viewDetailsButton}>
+          <Text style={styles.viewDetailsButtonText}>View Details</Text>
+        </TouchableOpacity>
       </TouchableOpacity>
     );
   };
 
-  // Render footer (loading indicator for infinite scroll)
+  // Render community wins
+  const renderCommunityWins = () => (
+    <View style={styles.communityWinsSection}>
+      <Text style={styles.communityWinsTitle}>Recent Community Wins</Text>
+      <View style={styles.stackedCard}>
+        <View style={[styles.stackLayer, styles.stackLayer1]}>
+          <View style={styles.winContent}>
+            <Text style={styles.winAction}>✨ Rivka's garden was tidied</Text>
+            <Text style={styles.winHelper}>Helped by David • 2h ago</Text>
+            <Text style={styles.winTestimonial}>
+              "A small gesture that brought so much light to my week. Thank you!"
+            </Text>
+          </View>
+        </View>
+        <View style={[styles.stackLayer, styles.stackLayer2]} />
+        <View style={[styles.stackLayer, styles.stackLayer3]} />
+      </View>
+    </View>
+  );
+
+  // Render footer (loading indicator)
   const renderFooter = () => {
     if (!isLoadingMore) return null;
     return (
@@ -175,13 +267,6 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Requests</Text>
-        <Text style={styles.headerSubtitle}>
-          {requests.length} requests available
-        </Text>
-      </View>
-
       <FlatList
         data={requests}
         keyExtractor={(item) => item.id}
@@ -191,7 +276,18 @@ export default function HomeScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
-        ListFooterComponent={renderFooter}
+        ListHeaderComponent={
+          <>
+            {renderHero()}
+            {renderSectionHeader()}
+          </>
+        }
+        ListFooterComponent={
+          <>
+            {renderFooter()}
+            {requests.length > 0 && renderCommunityWins()}
+          </>
+        }
         ListEmptyComponent={renderEmpty}
         scrollIndicatorInsets={{ right: 1 }}
         contentContainerStyle={styles.flatListContent}
@@ -205,100 +301,148 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fafaf0',
   },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 12,
-    backgroundColor: '#fafaf0',
+  flatListContent: {
+    paddingBottom: 40,
   },
-  headerTitle: {
-    fontSize: 28,
+  heroSection: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 32,
+    gap: 16,
+  },
+  heroTitle: {
+    fontSize: 32,
     fontWeight: '800',
+    color: '#303429',
+  },
+  heroSubtitle: {
+    fontSize: 16,
+    color: '#797c6f',
+    lineHeight: 24,
+  },
+  heroButton: {
+    backgroundColor: '#3c6a35',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  heroButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  heroButtonIcon: {
+    fontSize: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: '700',
     color: '#303429',
     marginBottom: 4,
   },
-  headerSubtitle: {
-    fontSize: 14,
+  sectionSubtitle: {
+    fontSize: 12,
     color: '#797c6f',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  flatListContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
+  filterButton: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3c6a35',
   },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f4f4e9',
     borderRadius: 12,
     padding: 16,
+    marginHorizontal: 16,
     marginBottom: 12,
     borderLeftWidth: 4,
-    borderLeftColor: '#3c6a35',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#303429',
+  clusterBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
     flex: 1,
     marginRight: 8,
   },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
+  clusterIcon: {
+    fontSize: 14,
   },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#fff',
+  clusterLabel: {
+    fontSize: 11,
+    fontWeight: '700',
     textTransform: 'capitalize',
+    flex: 1,
+  },
+  distance: {
+    fontSize: 12,
+    color: '#797c6f',
+    fontWeight: '600',
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#303429',
+    marginBottom: 8,
   },
   cardDescription: {
     fontSize: 14,
-    color: '#5a5e54',
-    marginBottom: 10,
+    color: '#5d6054',
     lineHeight: 20,
+    marginBottom: 12,
   },
   cardFooter: {
     flexDirection: 'row',
-    marginBottom: 10,
-    gap: 8,
+    marginBottom: 12,
   },
-  categoryTag: {
-    backgroundColor: '#e6f4fe',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
+  timingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  categoryText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#0284c7',
-    textTransform: 'capitalize',
+  timingIcon: {
+    fontSize: 14,
   },
-  urgencyTag: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  urgencyText: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  locationText: {
+  timingText: {
     fontSize: 13,
     color: '#797c6f',
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  viewDetailsButton: {
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#e2e4d4',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  viewDetailsButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#303429',
   },
   footerLoader: {
     paddingVertical: 20,
@@ -319,4 +463,66 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#797c6f',
   },
+  communityWinsSection: {
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    paddingBottom: 20,
+  },
+  communityWinsTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#303429',
+    marginBottom: 16,
+  },
+  stackedCard: {
+    height: 180,
+    position: 'relative',
+  },
+  stackLayer: {
+    position: 'absolute',
+    width: '100%',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e4d4',
+  },
+  stackLayer1: {
+    height: 180,
+    zIndex: 3,
+    padding: 16,
+  },
+  stackLayer2: {
+    height: 60,
+    top: -8,
+    zIndex: 2,
+    opacity: 0.6,
+  },
+  stackLayer3: {
+    height: 60,
+    top: -16,
+    zIndex: 1,
+    opacity: 0.3,
+  },
+  winContent: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  winAction: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#303429',
+    marginBottom: 4,
+  },
+  winHelper: {
+    fontSize: 13,
+    color: '#797c6f',
+    marginBottom: 12,
+  },
+  winTestimonial: {
+    fontSize: 14,
+    color: '#5d6054',
+    fontStyle: 'italic',
+    lineHeight: 20,
+  },
 });
+
