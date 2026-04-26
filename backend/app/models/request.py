@@ -4,6 +4,7 @@ from sqlalchemy.orm import relationship
 import uuid
 from enum import Enum as PyEnum
 from app.db.base import Base, TimestampMixin
+from app.models.category import Category
 
 
 class FavorCategory(str, PyEnum):
@@ -34,8 +35,8 @@ class Request(Base, TimestampMixin):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     requester_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    category_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=False, index=True)
     
-    category = Column(Enum(FavorCategory), nullable=False, index=True)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=False)
     
@@ -53,3 +54,4 @@ class Request(Base, TimestampMixin):
     notes = Column(Text, nullable=True)
     
     requester = relationship("User", foreign_keys=[requester_id])
+    category_obj = relationship("Category", back_populates="requests")

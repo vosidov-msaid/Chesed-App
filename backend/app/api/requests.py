@@ -1,12 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
+from sqlalchemy.orm import selectinload
 from uuid import UUID
 from typing import List
 from math import radians, cos, sin, asin, sqrt
 
 from app.db.session import get_db_session
 from app.models import Request, User, RequestStatus
+from app.models.category import Category
+from app.models.request import FavorCategory
 from app.schemas.request import RequestCreate, RequestResponse, RequestUpdate
 from app.core.dependencies import get_current_user
 
@@ -24,6 +27,13 @@ def haversine(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
     return km
 
 
+def request_to_response(req: Request) -> RequestResponse:
+    """Convert Request model to RequestResponse with category name."""
+    response = RequestResponse.model_validate(req)
+    response.category = req.category_obj.name if req.category_obj else "unknown"
+    return response
+
+
 @router.post("/", response_model=RequestResponse, status_code=status.HTTP_201_CREATED)
 async def create_request(
     request_data: RequestCreate,
@@ -31,9 +41,21 @@ async def create_request(
     db: AsyncSession = Depends(get_db_session),
 ) -> RequestResponse:
     """Create a new favor request."""
+    # Find category by name
+    category_name = request_data.category.value if hasattr(request_data.category, 'value') else str(request_data.category)
+    stmt = select(Category).where(Category.name == category_name)
+    result = await db.execute(stmt)
+    category = result.scalar_one_or_none()
+    
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Category '{category_name}' not found. Available categories must be seeded first.",
+        )
+    
     new_request = Request(
         requester_id=current_user.id,
-        category=request_data.category,
+        category_id=category.id,
         title=request_data.title,
         description=request_data.description,
         latitude=request_data.latitude,
@@ -48,7 +70,11 @@ async def create_request(
     db.add(new_request)
     await db.commit()
     await db.refresh(new_request)
-    return new_request
+    
+    # Convert to response manually to include category name
+    response = RequestResponse.model_validate(new_request)
+    response.category = category.name
+    return response
 
 
 @router.get("/{request_id}", response_model=RequestResponse)
@@ -58,7 +84,7 @@ async def get_request(
     db: AsyncSession = Depends(get_db_session),
 ) -> RequestResponse:
     """Get a specific request by ID (authenticated users only)."""
-    stmt = select(Request).where(Request.id == request_id)
+    stmt = select(Request).where(Request.id == request_id).options(selectinload(Request.category_obj))
     result = await db.execute(stmt)
     request_obj = result.scalar_one_or_none()
 
@@ -67,7 +93,7 @@ async def get_request(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Request not found",
         )
-    return request_obj
+    return request_to_response(request_obj)
 
 
 @router.get("/", response_model=List[RequestResponse])
@@ -79,14 +105,14 @@ async def list_requests(
     limit: int = Query(100),
 ) -> List[RequestResponse]:
     """List all public requests with optional status filter (authenticated users only)."""
-    stmt = select(Request).where(Request.is_public == True).offset(skip).limit(limit)
+    stmt = select(Request).where(Request.is_public == True).options(selectinload(Request.category_obj)).offset(skip).limit(limit)
 
     if status_filter:
         stmt = stmt.where(Request.status == status_filter)
 
     result = await db.execute(stmt)
     requests = result.scalars().all()
-    return requests
+    return [request_to_response(req) for req in requests]
 
 
 @router.get("/nearby/search", response_model=List[RequestResponse])
@@ -104,10 +130,14 @@ async def get_nearby_requests(
             Request.is_public == True,
             Request.status == RequestStatus.OPEN,
         )
-    )
+    ).options(selectinload(Request.category_obj))
 
     if category:
-        stmt = stmt.where(Request.category == category)
+        cat_stmt = select(Category).where(Category.name == category)
+        cat_result = await db.execute(cat_stmt)
+        cat_obj = cat_result.scalar_one_or_none()
+        if cat_obj:
+            stmt = stmt.where(Request.category_id == cat_obj.id)
 
     result = await db.execute(stmt)
     all_requests = result.scalars().all()
@@ -119,7 +149,7 @@ async def get_nearby_requests(
         if distance <= radius_km:
             nearby.append(req)
 
-    return nearby
+    return [request_to_response(req) for req in nearby]
 
 
 @router.put("/{request_id}", response_model=RequestResponse)

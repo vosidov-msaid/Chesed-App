@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import api from '../../../services/api';
+import api from '../../../../services/api';
 
 const CATEGORY_ICONS: { [key: string]: string } = {
   mobility: '🚗',

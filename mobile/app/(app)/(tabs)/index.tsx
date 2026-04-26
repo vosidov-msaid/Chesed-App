@@ -182,7 +182,7 @@ export default function HomeScreen() {
     return (
       <TouchableOpacity
         style={[styles.card, { borderLeftColor: categoryColor }]}
-        onPress={() => router.push(`/request/${item.id}`)}
+        onPress={() => router.push(`/(app)/(tabs)/request/${item.id}`)}
       >
         {/* Card Header: Category Badge + Distance */}
         <View style={styles.cardHeader}>
