@@ -10,7 +10,7 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import api from '../../../services/api';
 import { useAuthStore } from '../../../store/authStore';
 
@@ -110,6 +110,15 @@ export default function HomeScreen() {
   useEffect(() => {
     fetchRequests(0);
   }, [fetchRequests]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setRequests([]);
+      setSkip(0);
+      setHasMore(true);
+      fetchRequests(0);
+    }, [fetchRequests])
+  );
 
   const handleLoadMore = () => {
     if (!isLoadingMore && hasMore) {

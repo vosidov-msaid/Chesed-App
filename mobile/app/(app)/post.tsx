@@ -1,10 +1,13 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as Location from 'expo-location';
 import api from '../../services/api';
 
 export default function PostScreen() {
+  const router = useRouter();
   const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
   const [step, setStep] = useState(1);
   const [title, setTitle] = useState('');
@@ -14,6 +17,8 @@ export default function PostScreen() {
   const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [dateMode, setDateMode] = useState<'date' | 'time'>('date');
+  const [location, setLocation] = useState<{ latitude: number; longitude: number; address: string } | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,15 +26,56 @@ export default function PostScreen() {
     { id: 'mobility', name: '🚗 Mobility', label: 'RIDES & LIFTS', color: '#4b6368' },
     { id: 'errands', name: '📦 Errands & Logistics', label: 'PICKUP & DROP', color: '#3c6a35' },
     { id: 'food', name: '🍲 Food', label: 'DELIVERY & SUPPORT', color: '#865406' },
-    { id: 'borrow', name: '🛠️ Borrow / Lend', label: 'TOOLS & ITEMS', color: '#5d3800' },
+    { id: 'borrow_lend', name: '🛠️ Borrow / Lend', label: 'TOOLS & ITEMS', color: '#5d3800' },
     { id: 'care', name: '👶 Care', label: 'KIDS & ELDERLY', color: '#376430' },
     { id: 'muscle', name: '💪 Muscle', label: 'HEAVY LIFTING', color: '#694000' },
     { id: 'presence', name: '🫂 Presence', label: 'VISITING & COMPANY', color: '#475f64' },
-    { id: 'skills', name: '🔧 Practical Skills', label: 'TECH & REPAIR', color: '#5a3f35' },
+    { id: 'practical_skills', name: '🔧 Practical Skills', label: 'TECH & REPAIR', color: '#5a3f35' },
   ];
 
   const getClusterName = (id: string | null) => {
     return clusters.find(c => c.id === id)?.name || '';
+  };
+
+  useEffect(() => {
+    if (step === 2 && !location) {
+      requestLocation();
+    }
+  }, [step]);
+
+  const requestLocation = async () => {
+    setLocationLoading(true);
+    setLocation(null);
+    
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Location permission is required');
+        return;
+      }
+
+      try {
+        const currentLocation = await Location.getCurrentPositionAsync({});
+        const { latitude, longitude } = currentLocation.coords;
+
+        try {
+          const reverseGeocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+          const address = reverseGeocode[0]
+            ? `${reverseGeocode[0].city}, ${reverseGeocode[0].region}`
+            : `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+
+          setLocation({ latitude, longitude, address });
+        } catch (err) {
+          setLocation({ latitude, longitude, address: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` });
+        }
+      } catch (err) {
+        Alert.alert('Error', 'Failed to get location');
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Failed to request location permission');
+    } finally {
+      setLocationLoading(false);
+    }
   };
 
   const handleContinue = () => {
@@ -46,8 +92,23 @@ export default function PostScreen() {
       return;
     }
 
+    if (title.trim().length < 5) {
+      Alert.alert('Error', 'Title must be at least 5 characters');
+      return;
+    }
+
+    if (description.trim().length < 10) {
+      Alert.alert('Error', 'Description must be at least 10 characters');
+      return;
+    }
+
     if (timing === 'scheduled' && !selectedDateTime) {
       Alert.alert('Error', 'Please select a date and time');
+      return;
+    }
+
+    if (!location) {
+      Alert.alert('Error', 'Location is required');
       return;
     }
 
@@ -64,18 +125,44 @@ export default function PostScreen() {
         urgency,
         timing,
         requestDateTime: requestDateTime?.toISOString(),
+        latitude: location.latitude,
+        longitude: location.longitude,
+        address: location.address,
       });
 
-      Alert.alert('Success', 'Request posted successfully!');
-      setTitle('');
-      setDescription('');
-      setUrgency('normal');
-      setTiming('now');
-      setSelectedDateTime(null);
-      setSelectedCluster(null);
-      setStep(1);
+      Alert.alert('Success', 'Request posted successfully!', [
+        {
+          text: 'OK',
+          onPress: () => {
+            setTitle('');
+            setDescription('');
+            setUrgency('normal');
+            setTiming('now');
+            setSelectedDateTime(null);
+            setSelectedCluster(null);
+            setLocation(null);
+            router.push('/(app)/(tabs)');
+          },
+        },
+      ]);
     } catch (err: any) {
-      const errorMsg = err?.response?.data?.detail || 'Failed to post request';
+      let errorMsg = 'Failed to post request';
+      
+      // Handle Pydantic validation errors (array of errors)
+      if (Array.isArray(err?.response?.data?.detail)) {
+        errorMsg = err.response.data.detail
+          .map((e: any) => `${e.loc?.[1] || 'Field'}: ${e.msg}`)
+          .join('\n');
+      } 
+      // Handle single error message
+      else if (typeof err?.response?.data?.detail === 'string') {
+        errorMsg = err.response.data.detail;
+      }
+      // Handle object errors
+      else if (typeof err?.response?.data?.detail === 'object') {
+        errorMsg = JSON.stringify(err.response.data.detail);
+      }
+      
       setError(errorMsg);
       Alert.alert('Error', errorMsg);
     } finally {
@@ -223,9 +310,9 @@ export default function PostScreen() {
 
             {/* Title Input */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Title *</Text>
+              <Text style={styles.label}>Title * (min 5 characters)</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, title.trim().length > 0 && title.trim().length < 5 && styles.inputError]}
                 placeholder="Brief title of your request"
                 placeholderTextColor="#b1b3a5"
                 value={title}
@@ -233,14 +320,16 @@ export default function PostScreen() {
                 maxLength={100}
                 editable={!isLoading}
               />
-              <Text style={styles.charCount}>{title.length}/100</Text>
+              <Text style={[styles.charCount, title.trim().length > 0 && title.trim().length < 5 && styles.charCountError]}>
+                {title.length}/100 {title.trim().length > 0 && title.trim().length < 5 ? '⚠️' : ''}
+              </Text>
             </View>
 
             {/* Description Input */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Description *</Text>
+              <Text style={styles.label}>Description * (min 10 characters)</Text>
               <TextInput
-                style={[styles.input, styles.textArea]}
+                style={[styles.input, styles.textArea, description.trim().length > 0 && description.trim().length < 10 && styles.inputError]}
                 placeholder="Provide details about what you need help with"
                 placeholderTextColor="#b1b3a5"
                 value={description}
@@ -251,7 +340,9 @@ export default function PostScreen() {
                 maxLength={500}
                 editable={!isLoading}
               />
-              <Text style={styles.charCount}>{description.length}/500</Text>
+              <Text style={[styles.charCount, description.trim().length > 0 && description.trim().length < 10 && styles.charCountError]}>
+                {description.length}/500 {description.trim().length > 0 && description.trim().length < 10 ? '⚠️' : ''}
+              </Text>
             </View>
 
             {/* Timing Selection */}
@@ -381,7 +472,37 @@ export default function PostScreen() {
               </View>
             </View>
 
-            {/* Error Message */}
+            {/* Location Section */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>📍 Location</Text>
+              {locationLoading ? (
+                <View style={styles.locationBox}>
+                  <ActivityIndicator color="#3c6a35" />
+                  <Text style={styles.locationText}>Getting your location...</Text>
+                </View>
+              ) : location ? (
+                <View style={styles.locationRow}>
+                  <View style={styles.locationBox}>
+                    <Text style={styles.locationText}>{location.address}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.refreshButton}
+                    onPress={requestLocation}
+                    disabled={isLoading}
+                  >
+                    <Text style={styles.refreshButtonText}>🔄</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.locationButton}
+                  onPress={requestLocation}
+                  disabled={isLoading}
+                >
+                  <Text style={styles.locationButtonText}>📍 Enable Location</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             {error && (
               <View style={styles.errorBox}>
                 <Text style={styles.errorText}>{error}</Text>
@@ -390,9 +511,13 @@ export default function PostScreen() {
 
             {/* Submit Button */}
             <TouchableOpacity
-              style={[styles.submitButton, isLoading && styles.submitButtonLoading]}
+              style={[
+                styles.submitButton,
+                isLoading && styles.submitButtonLoading,
+                (!location || !title.trim() || !description.trim() || (timing === 'scheduled' && !selectedDateTime)) && styles.submitButtonDisabled,
+              ]}
               onPress={handleSubmitRequest}
-              disabled={isLoading}
+              disabled={isLoading || !location || !title.trim() || !description.trim() || (timing === 'scheduled' && !selectedDateTime)}
             >
               {isLoading ? (
                 <ActivityIndicator color="#fff" />
@@ -613,6 +738,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: 'right',
   },
+  charCountError: {
+    color: '#a73b21',
+    fontWeight: '600',
+  },
+  inputError: {
+    borderColor: '#a73b21',
+  },
 
   // Urgency Buttons
   urgencyButtons: {
@@ -654,6 +786,63 @@ const styles = StyleSheet.create({
   },
   dateTimeInput: {
     flex: 1,
+  },
+
+  // Location Styles
+  locationRow: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  locationBox: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e4d4',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  locationText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#303429',
+  },
+  locationCoords: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  refreshButton: {
+    backgroundColor: '#f4f4e9',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e4d4',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 50,
+  },
+  refreshButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#303429',
+  },
+  locationButton: {
+    backgroundColor: '#3c6a35',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2d5328',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  locationButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 
   // Date Picker Button (kept for reference but no longer used)
