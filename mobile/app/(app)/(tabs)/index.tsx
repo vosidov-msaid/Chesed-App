@@ -28,14 +28,7 @@ interface Request {
   scheduled_date?: string;
 }
 
-interface CommunityWin {
-  id: string;
-  userName: string;
-  helperName: string;
-  action: string;
-  time: string;
-  testimonial: string;
-}
+
 
 const ITEMS_PER_PAGE = 10;
 
@@ -234,29 +227,7 @@ export default function HomeScreen() {
     );
   };
 
-  const renderCommunityWins = () => (
-    <View style={styles.communityWinsSection}>
-      <Text style={styles.communityWinsTitle}>Recent Community Wins</Text>
-      <View style={styles.stackedCard}>
-        <View style={[styles.stackLayer, styles.stackLayer1]}>
-          <View style={styles.winHeader}>
-            <View style={styles.winAvatar}>
-              <Text style={styles.winAvatarText}>✨</Text>
-            </View>
-            <View>
-              <Text style={styles.winAction}>Rivka's garden was tidied</Text>
-              <Text style={styles.winHelper}>Helped by David • 2h ago</Text>
-            </View>
-          </View>
-          <Text style={styles.winTestimonial}>
-            "A small gesture that brought so much light to my week. Thank you!"
-          </Text>
-        </View>
-        <View style={[styles.stackLayer, styles.stackLayer2]} />
-        <View style={[styles.stackLayer, styles.stackLayer3]} />
-      </View>
-    </View>
-  );
+
 
   const renderFooter = () => {
     if (!isLoadingMore) return null;
@@ -297,12 +268,7 @@ export default function HomeScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
         ListHeaderComponent={renderHeader}
-        ListFooterComponent={
-          <>
-            {renderFooter()}
-            {requests.length > 0 && renderCommunityWins()}
-          </>
-        }
+        ListFooterComponent={renderFooter}
         ListEmptyComponent={renderEmpty}
         scrollIndicatorInsets={{ right: 1 }}
         contentContainerStyle={styles.flatListContent}
@@ -460,80 +426,7 @@ const styles = StyleSheet.create({
     color: '#303429',
   },
 
-  // Community Wins
-  communityWinsSection: {
-    paddingHorizontal: 24,
-    paddingTop: 32,
-    paddingBottom: 20,
-  },
-  communityWinsTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#303429',
-    marginBottom: 16,
-  },
-  stackedCard: {
-    height: 200,
-    position: 'relative',
-  },
-  stackLayer: {
-    position: 'absolute',
-    width: '100%',
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e2e4d4',
-  },
-  stackLayer1: {
-    height: 200,
-    zIndex: 3,
-    padding: 16,
-    gap: 12,
-  },
-  stackLayer2: {
-    height: 60,
-    top: -8,
-    zIndex: 2,
-    opacity: 0.6,
-  },
-  stackLayer3: {
-    height: 60,
-    top: -16,
-    zIndex: 1,
-    opacity: 0.3,
-  },
-  winHeader: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'flex-start',
-  },
-  winAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#b9eeab',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  winAvatarText: {
-    fontSize: 20,
-  },
-  winAction: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#303429',
-  },
-  winHelper: {
-    fontSize: 12,
-    color: '#797c6f',
-    fontWeight: '600',
-  },
-  winTestimonial: {
-    fontSize: 13,
-    color: '#5d6054',
-    fontStyle: 'italic',
-    lineHeight: 20,
-  },
+
 
   // Loading & Empty States
   footerLoader: {

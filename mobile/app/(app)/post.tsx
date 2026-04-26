@@ -124,10 +124,10 @@ export default function PostScreen() {
         category: selectedCluster,
         urgency,
         timing,
-        requestDateTime: requestDateTime?.toISOString(),
+        scheduled_at: requestDateTime?.toISOString(),
         latitude: location.latitude,
         longitude: location.longitude,
-        address: location.address,
+        location_name: location.address,
       });
 
       Alert.alert('Success', 'Request posted successfully!', [
@@ -189,21 +189,22 @@ export default function PostScreen() {
   };
 
   const handleDateChange = (event: any, date: Date | undefined) => {
-    if (Platform.OS === 'android') {
-      setShowDatePicker(false);
-    }
-    
     if (date) {
       if (dateMode === 'date') {
         setSelectedDateTime(date);
-        if (Platform.OS === 'ios') {
+        // On Android, show time picker after date is selected
+        if (Platform.OS === 'android') {
           setDateMode('time');
+          setShowDatePicker(true);
         } else {
-          setShowDatePicker(false);
+          // On iOS, automatically switch to time mode
+          setDateMode('time');
         }
       } else {
+        // Time has been selected
         setSelectedDateTime(date);
         setShowDatePicker(false);
+        setDateMode('date');
       }
     }
   };

@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     
     secret_key: str = "your-secret-key-change-in-production"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
+    access_token_expire_minutes: int = 10080  # 7 days
     
     # Email configuration
     email_verification_enabled: bool = True
