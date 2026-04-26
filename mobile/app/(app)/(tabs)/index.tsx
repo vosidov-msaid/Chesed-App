@@ -397,13 +397,6 @@ export default function HomeScreen() {
         contentContainerStyle={styles.flatListContent}
       />
 
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={openCreateModal}
-      >
-        <Text style={styles.fabText}>+</Text>
-      </TouchableOpacity>
-
       {/* Create Request Modal */}
       <Modal
         visible={showCreateModal}
