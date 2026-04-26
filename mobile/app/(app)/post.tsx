@@ -130,7 +130,7 @@ export default function PostScreen() {
         location_name: location.address,
       });
 
-      Alert.alert('Success', 'Request posted successfully!', [
+       Alert.alert('Success', 'Request posted successfully!', [
         {
           text: 'OK',
           onPress: () => {
@@ -141,6 +141,7 @@ export default function PostScreen() {
             setSelectedDateTime(null);
             setSelectedCluster(null);
             setLocation(null);
+            setStep(1);
             router.push('/(app)/(tabs)');
           },
         },

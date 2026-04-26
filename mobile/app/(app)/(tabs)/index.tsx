@@ -143,23 +143,25 @@ export default function HomeScreen() {
 
   const renderHeader = () => (
     <View>
-      {/* Hero Section */}
-      <View style={styles.heroSection}>
-        <Text style={styles.heroTitle}>Need a Favor?</Text>
-        <Text style={styles.heroSubtitle}>
-          Your community is here to help. Share what you need, and let kindness find its way to you.
-        </Text>
-        <TouchableOpacity
-          style={styles.heroButton}
-          onPress={handleStartRequest}
-        >
-          <Text style={styles.heroButtonText}>Start a New Request</Text>
-          <Text style={styles.heroButtonIcon}>+</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Hero Section - Only show if no requests */}
+      {requests.length === 0 && (
+        <View style={styles.heroSection}>
+          <Text style={styles.heroTitle}>Need a Favor?</Text>
+          <Text style={styles.heroSubtitle}>
+            Your community is here to help. Share what you need, and let kindness find its way to you.
+          </Text>
+          <TouchableOpacity
+            style={styles.heroButton}
+            onPress={handleStartRequest}
+          >
+            <Text style={styles.heroButtonText}>Start a New Request</Text>
+            <Text style={styles.heroButtonIcon}>+</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Section Header */}
-      <View style={styles.sectionHeader}>
+      <View style={[styles.sectionHeader, requests.length > 0 && styles.sectionHeaderWithoutHero]}>
         <View>
           <Text style={styles.sectionTitle}>Nearby Help Requests</Text>
           <Text style={styles.sectionSubtitle}>ACTIVE IN YOUR CIRCLE</Text>
@@ -329,6 +331,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingHorizontal: 24,
     paddingBottom: 16,
+  },
+  sectionHeaderWithoutHero: {
+    paddingTop: 44,
   },
   sectionTitle: {
     fontSize: 22,
