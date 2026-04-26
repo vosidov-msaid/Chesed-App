@@ -1,14 +1,19 @@
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState } from 'react';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import api from '../../services/api';
 
 export default function PostScreen() {
   const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
-  const [step, setStep] = useState(1); // Step 1: category selection, Step 2: details
+  const [step, setStep] = useState(1);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [urgency, setUrgency] = useState('normal');
+  const [timing, setTiming] = useState<'now' | 'scheduled'>('now');
+  const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [dateMode, setDateMode] = useState<'date' | 'time'>('date');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,22 +46,32 @@ export default function PostScreen() {
       return;
     }
 
+    if (timing === 'scheduled' && !selectedDateTime) {
+      Alert.alert('Error', 'Please select a date and time');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
+      const requestDateTime = timing === 'now' ? new Date() : selectedDateTime;
+      
       await api.createRequest({
         title,
         description,
         category: selectedCluster,
         urgency,
-        timing: urgency === 'now' ? 'now' : 'scheduled',
+        timing,
+        requestDateTime: requestDateTime?.toISOString(),
       });
 
       Alert.alert('Success', 'Request posted successfully!');
       setTitle('');
       setDescription('');
       setUrgency('normal');
+      setTiming('now');
+      setSelectedDateTime(null);
       setSelectedCluster(null);
       setStep(1);
     } catch (err: any) {
@@ -73,6 +88,48 @@ export default function PostScreen() {
     setTitle('');
     setDescription('');
     setUrgency('normal');
+    setTiming('now');
+    setSelectedDateTime(null);
+    setShowDatePicker(false);
+  };
+
+  const handleDatePicker = () => {
+    if (!selectedDateTime) {
+      setSelectedDateTime(new Date());
+    }
+    setDateMode('date');
+    setShowDatePicker(true);
+  };
+
+  const handleDateChange = (event: any, date: Date | undefined) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+    
+    if (date) {
+      if (dateMode === 'date') {
+        setSelectedDateTime(date);
+        if (Platform.OS === 'ios') {
+          setDateMode('time');
+        } else {
+          setShowDatePicker(false);
+        }
+      } else {
+        setSelectedDateTime(date);
+        setShowDatePicker(false);
+      }
+    }
+  };
+
+  const formatDateTime = (date: Date | null) => {
+    if (!date) return 'Select date & time';
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
   return (
@@ -197,25 +254,94 @@ export default function PostScreen() {
               <Text style={styles.charCount}>{description.length}/500</Text>
             </View>
 
-            {/* Urgency Selection */}
+            {/* Timing Selection */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>How soon do you need help?</Text>
+              <Text style={styles.label}>When do you need it?</Text>
               <View style={styles.urgencyButtons}>
                 <TouchableOpacity
                   style={[
                     styles.urgencyButton,
-                    urgency === 'now' && styles.urgencyButtonActive,
+                    timing === 'now' && styles.urgencyButtonActive,
                   ]}
-                  onPress={() => setUrgency('now')}
+                  onPress={() => setTiming('now')}
                   disabled={isLoading}
                 >
                   <Text
                     style={[
                       styles.urgencyButtonText,
-                      urgency === 'now' && styles.urgencyButtonTextActive,
+                      timing === 'now' && styles.urgencyButtonTextActive,
                     ]}
                   >
-                    ⚡ Now
+                    ⏱️ Now
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.urgencyButton,
+                    timing === 'scheduled' && styles.urgencyButtonActive,
+                  ]}
+                  onPress={() => setTiming('scheduled')}
+                  disabled={isLoading}
+                >
+                  <Text
+                    style={[
+                      styles.urgencyButtonText,
+                      timing === 'scheduled' && styles.urgencyButtonTextActive,
+                    ]}
+                  >
+                    📆 Scheduled
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Date & Time Picker */}
+            {timing === 'scheduled' && (
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Select Date & Time</Text>
+                
+                <TouchableOpacity
+                  style={styles.submitButton}
+                  onPress={handleDatePicker}
+                  disabled={isLoading}
+                >
+                  <Text style={styles.submitButtonText}>
+                    📅 {selectedDateTime ? formatDateTime(selectedDateTime) : 'Choose Date & Time'}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Native Date Time Picker */}
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={selectedDateTime || new Date()}
+                    mode={dateMode}
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={handleDateChange}
+                    minimumDate={new Date()}
+                  />
+                )}
+              </View>
+            )}
+
+            {/* Urgency Level Selection */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Priority Level</Text>
+              <View style={[styles.urgencyButtons, styles.threeButtonRow]}>
+                <TouchableOpacity
+                  style={[
+                    styles.urgencyButton,
+                    urgency === 'low' && styles.urgencyButtonActive,
+                  ]}
+                  onPress={() => setUrgency('low')}
+                  disabled={isLoading}
+                >
+                  <Text
+                    style={[
+                      styles.urgencyButtonText,
+                      urgency === 'low' && styles.urgencyButtonTextActive,
+                    ]}
+                  >
+                    Low
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -232,7 +358,24 @@ export default function PostScreen() {
                       urgency === 'normal' && styles.urgencyButtonTextActive,
                     ]}
                   >
-                    📅 Scheduled
+                    Normal
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.urgencyButton,
+                    urgency === 'high' && styles.urgencyButtonActive,
+                  ]}
+                  onPress={() => setUrgency('high')}
+                  disabled={isLoading}
+                >
+                  <Text
+                    style={[
+                      styles.urgencyButtonText,
+                      urgency === 'high' && styles.urgencyButtonTextActive,
+                    ]}
+                  >
+                    Urgent
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -476,6 +619,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
+  threeButtonRow: {
+    flexWrap: 'wrap',
+  },
   urgencyButton: {
     flex: 1,
     backgroundColor: '#f4f4e9',
@@ -498,6 +644,62 @@ const styles = StyleSheet.create({
   },
   urgencyButtonTextActive: {
     color: '#1a4716',
+  },
+
+  // Date & Time Input
+  dateTimeInputRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  dateTimeInput: {
+    flex: 1,
+  },
+
+  // Date Picker Button (kept for reference but no longer used)
+  datePickerButton: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e2e4d4',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  datePickerButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#303429',
+  },
+
+  // Date Picker Container
+  datePickerContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginVertical: 12,
+    borderWidth: 1,
+    borderColor: '#e2e4d4',
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e4d4',
+  },
+  datePickerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#303429',
+  },
+  datePickerHeaderText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#797c6f',
   },
 
   // Error Box
