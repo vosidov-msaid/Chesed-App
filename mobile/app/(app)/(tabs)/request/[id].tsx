@@ -40,13 +40,14 @@ export default function RequestDetailScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { id } = useLocalSearchParams();
-  const { location } = useGeolocation();
+  const { location, requestLocation } = useGeolocation();
   const [request, setRequest] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchRequest();
+    requestLocation();
   }, [id]);
 
   const fetchRequest = async () => {
