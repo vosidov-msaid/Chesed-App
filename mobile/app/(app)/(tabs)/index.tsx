@@ -26,7 +26,7 @@ interface Request {
   created_at: string;
   requester_id: string;
   distance?: number;
-  scheduled_date?: string;
+  scheduled_at?: string;
 }
 
 
@@ -136,9 +136,11 @@ export default function HomeScreen() {
     if (request.urgency === 'high' || request.urgency === 'urgent') {
       return { icon: '⚡', text: 'Now', color: '#a73b21' };
     }
-    if (request.scheduled_date) {
-      const date = new Date(request.scheduled_date);
-      return { icon: '📅', text: date.toLocaleDateString(), color: '#797c6f' };
+    if (request.scheduled_at) {
+      const date = new Date(request.scheduled_at);
+      const dateStr = date.toLocaleDateString();
+      const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return { icon: '📅', text: `${dateStr} at ${timeStr}`, color: '#797c6f' };
     }
     return { icon: '📅', text: 'Scheduled', color: '#797c6f' };
   };
