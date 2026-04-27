@@ -42,6 +42,7 @@ export default function RequestDetailScreen() {
   const { id } = useLocalSearchParams();
   const { location, requestLocation } = useGeolocation();
   const [request, setRequest] = useState<any>(null);
+  const [requester, setRequester] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -55,6 +56,16 @@ export default function RequestDetailScreen() {
       setIsLoading(true);
       const data = await api.getRequest(id as string);
       setRequest(data);
+      
+      // Fetch requester information
+      if (data.requester_id) {
+        try {
+          const requesterData = await api.getUser(data.requester_id);
+          setRequester(requesterData);
+        } catch (err) {
+          console.error('Failed to fetch requester:', err);
+        }
+      }
     } catch (error) {
       console.error('Failed to fetch request:', error);
       Alert.alert('Error', 'Failed to load request details');
@@ -228,15 +239,26 @@ export default function RequestDetailScreen() {
 
         {/* Requester Info */}
         <Text style={styles.sectionTitle}>Requester</Text>
-        <View style={styles.requesterBox}>
+        <TouchableOpacity 
+          style={styles.requesterBox}
+          onPress={() => router.push({
+            pathname: '/(app)/user-profile',
+            params: { userId: request.requester_id, userName: requester ? `${requester.first_name} ${requester.last_name}` : 'Community Member' }
+          })}
+        >
           <View style={styles.requesterAvatar}>
             <Text style={styles.avatarText}>👤</Text>
           </View>
           <View style={styles.requesterInfo}>
-            <Text style={styles.requesterName}>Community Member</Text>
-            <Text style={styles.requesterMeta}>ID: {request.requester_id.substring(0, 8)}...</Text>
+            <Text style={styles.requesterName}>
+              {requester ? `${requester.first_name || ''} ${requester.last_name || ''}`.trim() : 'Community Member'}
+            </Text>
+            <Text style={styles.requesterMeta}>
+              {requester?.bio || `ID: ${request.requester_id.substring(0, 8)}...`}
+            </Text>
           </View>
-        </View>
+          <Text style={styles.requesterLink}>→</Text>
+        </TouchableOpacity>
 
         {/* Help or Delete Button */}
         {request.requester_id === user?.id ? (
@@ -392,6 +414,11 @@ const styles = StyleSheet.create({
   requesterMeta: {
     fontSize: 12,
     color: '#797c6f',
+  },
+  requesterLink: {
+    fontSize: 18,
+    color: '#3c6a35',
+    fontWeight: '600',
   },
   helpButton: {
     backgroundColor: '#3c6a35',

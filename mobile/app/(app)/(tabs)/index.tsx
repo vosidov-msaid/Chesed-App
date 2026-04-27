@@ -77,7 +77,7 @@ export default function HomeScreen() {
         }
 
         const data = await api.getRequests(offset, ITEMS_PER_PAGE);
-        const filteredData = data.filter(req => req.requester_id !== user?.id);
+        const filteredData = data.filter(req => req.requester_id !== user?.id && req.status === 'open');
 
         if (offset === 0) {
           setRequests(filteredData);
