@@ -25,7 +25,8 @@ interface Request {
   urgency: string;
   created_at: string;
   requester_id: string;
-  distance?: number;
+  latitude: number;
+  longitude: number;
   scheduled_at?: string;
 }
 
@@ -132,6 +133,20 @@ export default function HomeScreen() {
     router.push('/post');
   };
 
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 3959; // Earth's radius in miles
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) *
+        Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(R * c * 10) / 10; // Round to 1 decimal place
+  };
+
   const getTimingDisplay = (request: Request) => {
     if (request.urgency === 'high' || request.urgency === 'urgent') {
       return { icon: '⚡', text: 'Now', color: '#a73b21' };
@@ -193,7 +208,12 @@ export default function HomeScreen() {
     const categoryColor = CATEGORY_COLORS[item.category] || '#3c6a35';
     const categoryIcon = CATEGORY_ICONS[item.category] || '📌';
     const timing = getTimingDisplay(item);
-    const distance = item.distance ? `${item.distance} mi away` : 'Near you';
+    
+    let distanceText = 'Near you';
+    if (location && item.latitude && item.longitude) {
+      const dist = calculateDistance(location.latitude, location.longitude, item.latitude, item.longitude);
+      distanceText = `${dist} mi away`;
+    }
 
     return (
       <TouchableOpacity
@@ -216,7 +236,7 @@ export default function HomeScreen() {
               {item.category.toUpperCase()}
             </Text>
           </View>
-          <Text style={styles.distance}>{distance}</Text>
+          <Text style={styles.distance}>{distanceText}</Text>
         </View>
 
         {/* Title */}
