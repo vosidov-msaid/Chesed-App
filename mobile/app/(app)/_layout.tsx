@@ -1,11 +1,13 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useWindowDimensions } from 'react-native';
+import { useWindowDimensions, TouchableOpacity, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 
 export default function AppLayout() {
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   
   // Responsive tab bar height based on screen
   const isSmallScreen = height < 700;
@@ -71,6 +73,16 @@ export default function AppLayout() {
               color={color}
             />
           ),
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() => router.push('/(app)/my-requests')}
+              style={{ marginRight: 16 }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#3c6a35' }}>
+                My Requests
+              </Text>
+            </TouchableOpacity>
+          ),
         }}
       />
       <Tabs.Screen
@@ -84,6 +96,28 @@ export default function AppLayout() {
               size={24}
               color={color}
             />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="my-requests"
+        options={{
+          title: '',
+          href: null,
+          headerLeft: () => (
+            <TouchableOpacity
+              onPress={() => router.push('/(app)/post')}
+              style={{ marginLeft: 16 }}
+            >
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#3c6a35' }}>
+                ← Back
+              </Text>
+            </TouchableOpacity>
+          ),
+          headerRight: () => (
+            <Text style={{ marginRight: 16, fontSize: 14, fontWeight: '700', color: '#303429' }}>
+              My Requests
+            </Text>
           ),
         }}
       />

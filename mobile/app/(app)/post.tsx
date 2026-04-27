@@ -1,7 +1,7 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import api from '../../services/api';
 import { useGeolocation } from '../../utils/useGeolocation';
@@ -105,7 +105,7 @@ export default function PostScreen() {
             setSelectedDateTime(null);
             setSelectedCluster(null);
             setStep(1);
-            router.push('/(app)/(tabs)');
+            router.push('/(app)/my-requests');
           },
         },
       ]);
@@ -542,6 +542,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#303429',
     textAlign: 'center',
+  },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 20,
+    paddingHorizontal: 16,
   },
   headerSubtitle: {
     marginBottom: 24,

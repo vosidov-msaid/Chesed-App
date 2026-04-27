@@ -77,14 +77,15 @@ export default function HomeScreen() {
         }
 
         const data = await api.getRequests(offset, ITEMS_PER_PAGE);
+        const filteredData = data.filter(req => req.requester_id !== user?.id);
 
         if (offset === 0) {
-          setRequests(data);
+          setRequests(filteredData);
         } else {
-          setRequests((prev) => [...prev, ...data]);
+          setRequests((prev) => [...prev, ...filteredData]);
         }
 
-        if (data.length < ITEMS_PER_PAGE) {
+        if (filteredData.length < ITEMS_PER_PAGE) {
           setHasMore(false);
         } else {
           setHasMore(true);
