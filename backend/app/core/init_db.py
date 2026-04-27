@@ -35,5 +35,3 @@ async def init_admin_user():
         db.add(admin)
         await db.commit()
         print("✓ Admin user created successfully")
-        print(f"  Phone: +992928245080")
-        print(f"  Password: 928245080_Vm")

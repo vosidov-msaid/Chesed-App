@@ -20,7 +20,3 @@ class EmailVerification(Base):
     def is_expired(self) -> bool:
         """Check if verification token has expired."""
         return datetime.utcnow() > self.expires_at
-
-    def is_valid(self) -> bool:
-        """Check if token is valid and not expired."""
-        return not self.is_expired() and not self.is_verified

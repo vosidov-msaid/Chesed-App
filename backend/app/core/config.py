@@ -1,22 +1,23 @@
 from pydantic_settings import BaseSettings
+from pydantic import Field
 from typing import Optional
 
 
 class Settings(BaseSettings):
     app_name: str = "Chesed API"
-    debug: bool = True
+    debug: bool = False
     api_version: str = "v1"
     
     database_url: str = "postgresql+asyncpg://user:password@localhost/chesed_db"
     
-    secret_key: str = "your-secret-key-change-in-production"
+    secret_key: str = Field(..., description="Secret key for JWT. Must be set via .env file for security.")
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 10080  # 7 days
     
     # Email configuration
     email_verification_enabled: bool = True
     email_verification_expiry_hours: int = 24
-    use_mock_email: bool = True
+    use_mock_email: bool = False
     smtp_host: str = "localhost"
     smtp_port: int = 587
     smtp_username: Optional[str] = None

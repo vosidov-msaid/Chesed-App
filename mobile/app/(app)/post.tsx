@@ -3,11 +3,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import * as Location from 'expo-location';
 import api from '../../services/api';
+import { useGeolocation } from '../../utils/useGeolocation';
 
 export default function PostScreen() {
   const router = useRouter();
+  const { location, isLoading: locationLoading, requestLocation } = useGeolocation();
   const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
   const [step, setStep] = useState(1);
   const [title, setTitle] = useState('');
@@ -17,8 +18,6 @@ export default function PostScreen() {
   const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [dateMode, setDateMode] = useState<'date' | 'time'>('date');
-  const [location, setLocation] = useState<{ latitude: number; longitude: number; address: string } | null>(null);
-  const [locationLoading, setLocationLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,42 +40,7 @@ export default function PostScreen() {
     if (step === 2 && !location) {
       requestLocation();
     }
-  }, [step]);
-
-  const requestLocation = async () => {
-    setLocationLoading(true);
-    setLocation(null);
-    
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Location permission is required');
-        return;
-      }
-
-      try {
-        const currentLocation = await Location.getCurrentPositionAsync({});
-        const { latitude, longitude } = currentLocation.coords;
-
-        try {
-          const reverseGeocode = await Location.reverseGeocodeAsync({ latitude, longitude });
-          const address = reverseGeocode[0]
-            ? `${reverseGeocode[0].city}, ${reverseGeocode[0].region}`
-            : `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
-
-          setLocation({ latitude, longitude, address });
-        } catch (err) {
-          setLocation({ latitude, longitude, address: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` });
-        }
-      } catch (err) {
-        Alert.alert('Error', 'Failed to get location');
-      }
-    } catch (err) {
-      Alert.alert('Error', 'Failed to request location permission');
-    } finally {
-      setLocationLoading(false);
-    }
-  };
+  }, [step, location, requestLocation]);
 
   const handleContinue = () => {
     if (!selectedCluster) {
@@ -140,7 +104,6 @@ export default function PostScreen() {
             setTiming('now');
             setSelectedDateTime(null);
             setSelectedCluster(null);
-            setLocation(null);
             setStep(1);
             router.push('/(app)/(tabs)');
           },
@@ -845,52 +808,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#ffffff',
-  },
-
-  // Date Picker Button (kept for reference but no longer used)
-  datePickerButton: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#e2e4d4',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  datePickerButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#303429',
-  },
-
-  // Date Picker Container
-  datePickerContainer: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginVertical: 12,
-    borderWidth: 1,
-    borderColor: '#e2e4d4',
-  },
-  datePickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e4d4',
-  },
-  datePickerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#303429',
-  },
-  datePickerHeaderText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#797c6f',
   },
 
   // Error Box

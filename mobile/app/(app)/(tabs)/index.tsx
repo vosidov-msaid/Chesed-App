@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import api from '../../../services/api';
 import { useAuthStore } from '../../../store/authStore';
+import { useGeolocation } from '../../../utils/useGeolocation';
 
 interface Request {
   id: string;
@@ -57,13 +58,13 @@ const CATEGORY_COLORS: { [key: string]: string } = {
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
+  const { location, isLoading: locationLoading, requestLocation } = useGeolocation();
   const [requests, setRequests] = useState<Request[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [skip, setSkip] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [userLocation, setUserLocation] = useState('London, UK');
 
   const fetchRequests = useCallback(
     async (offset: number = 0) => {
@@ -102,7 +103,8 @@ export default function HomeScreen() {
 
   useEffect(() => {
     fetchRequests(0);
-  }, [fetchRequests]);
+    requestLocation();
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -143,6 +145,18 @@ export default function HomeScreen() {
 
   const renderHeader = () => (
     <View>
+      {/* Location Section */}
+      <View style={styles.locationSection}>
+        <Text style={styles.locationLabel}>📍 Your Location</Text>
+        {locationLoading ? (
+          <ActivityIndicator size="small" color="#3c6a35" />
+        ) : (
+          <Text style={styles.locationText}>
+            {location?.address || 'Getting location...'}
+          </Text>
+        )}
+      </View>
+
       {/* Hero Section - Only show if no requests */}
       {requests.length === 0 && (
         <View style={styles.heroSection}>
@@ -222,7 +236,10 @@ export default function HomeScreen() {
         </View>
 
         {/* View Details Button */}
-        <TouchableOpacity style={styles.viewDetailsButton}>
+        <TouchableOpacity
+          style={styles.viewDetailsButton}
+          onPress={() => router.push(`/(app)/(tabs)/request/${item.id}`)}
+        >
           <Text style={styles.viewDetailsButtonText}>View Details</Text>
         </TouchableOpacity>
       </TouchableOpacity>
@@ -259,7 +276,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <FlatList
         data={requests}
         keyExtractor={(item) => item.id}
@@ -275,7 +292,7 @@ export default function HomeScreen() {
         scrollIndicatorInsets={{ right: 1 }}
         contentContainerStyle={styles.flatListContent}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -286,6 +303,28 @@ const styles = StyleSheet.create({
   },
   flatListContent: {
     paddingBottom: 100,
+  },
+
+  // Location Section
+  locationSection: {
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    backgroundColor: '#f0f4ed',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e4d4',
+  },
+  locationLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#797c6f',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  locationText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#3c6a35',
   },
 
   // Hero Section

@@ -62,19 +62,20 @@ async def create_review(
     )
 
     db.add(new_review)
+    await db.commit()
     
-    # Update reputation score of reviewed user
+    # Update reputation score AFTER committing the new review
     reviewed_user = result_reviewed.scalar_one_or_none()
     if reviewed_user:
-        # Get average rating for this user
+        # Get average rating for this user (now includes the newly added review)
         stmt_avg = select(func.avg(Review.rating)).where(
             Review.reviewed_user_id == reviewed_user_id
         )
         result_avg = await db.execute(stmt_avg)
         avg_rating = result_avg.scalar() or 0
         reviewed_user.reputation_score = int(avg_rating * 10)
+        await db.commit()
 
-    await db.commit()
     await db.refresh(new_review)
     return new_review
 

@@ -28,6 +28,64 @@ from app.services.email_service import get_email_service
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+async def _verify_email_token(token: str, db: AsyncSession) -> VerifyEmailResponse:
+    """
+    Helper function to verify email token.
+    Shared logic between POST and GET verify-email endpoints.
+    """
+    if not settings.email_verification_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email verification is not enabled",
+        )
+
+    # Find verification record by token
+    stmt = select(EmailVerification).where(EmailVerification.token == token)
+    result = await db.execute(stmt)
+    verification = result.scalar_one_or_none()
+
+    if not verification:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification token",
+        )
+
+    if verification.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already verified",
+        )
+
+    if verification.is_expired():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification token has expired. Request a new one.",
+        )
+
+    # Get user and mark as verified
+    stmt = select(User).where(User.id == verification.user_id)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    # Mark user and verification as verified
+    user.is_verified = True
+    verification.is_verified = True
+
+    await db.commit()
+
+    return VerifyEmailResponse(
+        message="Email verified successfully. You can now login.",
+        is_verified=True,
+    )
+
+
+
 @router.post("/login")
 async def login(
     credentials: LoginRequest,
@@ -161,59 +219,8 @@ async def verify_email(
     request: VerifyEmailRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> VerifyEmailResponse:
-    """
-    Verify email using the token sent in verification email.
-    """
-    if not settings.email_verification_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email verification is not enabled",
-        )
-
-    # Find verification record by token
-    stmt = select(EmailVerification).where(EmailVerification.token == request.token)
-    result = await db.execute(stmt)
-    verification = result.scalar_one_or_none()
-
-    if not verification:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired verification token",
-        )
-
-    if verification.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already verified",
-        )
-
-    if verification.is_expired():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Verification token has expired. Request a new one.",
-        )
-
-    # Get user and mark as verified
-    stmt = select(User).where(User.id == verification.user_id)
-    result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-
-    # Mark user and verification as verified
-    user.is_verified = True
-    verification.is_verified = True
-
-    await db.commit()
-
-    return VerifyEmailResponse(
-        message="Email verified successfully. You can now login.",
-        is_verified=True,
-    )
+    """Verify email using the token sent in verification email."""
+    return await _verify_email_token(request.token, db)
 
 
 @router.get("/verify-email", response_model=VerifyEmailResponse)
@@ -221,59 +228,8 @@ async def verify_email_get(
     token: str,
     db: AsyncSession = Depends(get_db_session),
 ) -> VerifyEmailResponse:
-    """
-    Verify email using GET request (for email link clicks).
-    """
-    if not settings.email_verification_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email verification is not enabled",
-        )
-
-    # Find verification record by token
-    stmt = select(EmailVerification).where(EmailVerification.token == token)
-    result = await db.execute(stmt)
-    verification = result.scalar_one_or_none()
-
-    if not verification:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired verification token",
-        )
-
-    if verification.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already verified",
-        )
-
-    if verification.is_expired():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Verification token has expired. Request a new one.",
-        )
-
-    # Get user and mark as verified
-    stmt = select(User).where(User.id == verification.user_id)
-    result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-
-    # Mark user and verification as verified
-    user.is_verified = True
-    verification.is_verified = True
-
-    await db.commit()
-
-    return VerifyEmailResponse(
-        message="Email verified successfully. You can now login.",
-        is_verified=True,
-    )
+    """Verify email using GET request (for email link clicks)."""
+    return await _verify_email_token(token, db)
 
 
 @router.post("/token", response_model=TokenResponse)

@@ -59,14 +59,17 @@ async def create_commitment(
         helper_id=current_user.id,
     )
 
-    db.add(new_commitment)
-
-    # Mark request as in_progress if this is first commitment
+    # Mark request as in_progress if this is the first commitment
+    # Check BEFORE adding new commitment
     stmt_count = select(Commitment).where(
         Commitment.request_id == request_id
     )
     result_count = await db.execute(stmt_count)
-    if not result_count.scalars().all():
+    existing_commitments = result_count.scalars().all()
+
+    db.add(new_commitment)
+
+    if not existing_commitments:
         request_obj.status = RequestStatus.IN_PROGRESS
 
     await db.commit()
