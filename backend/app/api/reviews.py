@@ -129,7 +129,8 @@ async def get_user_reviews(
     db: AsyncSession = Depends(get_db_session),
 ) -> List[ReviewResponse]:
     """Get all reviews received by a user (authenticated users only)."""
-    stmt = select(Review).where(Review.reviewed_user_id == user_id)
+    from sqlalchemy.orm import joinedload
+    stmt = select(Review).where(Review.reviewed_user_id == user_id).options(joinedload(Review.reviewer))
     result = await db.execute(stmt)
-    reviews = result.scalars().all()
+    reviews = result.unique().scalars().all()
     return reviews

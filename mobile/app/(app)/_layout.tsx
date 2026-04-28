@@ -121,6 +121,14 @@ export default function AppLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="user-profile"
+        options={{
+          title: 'Profile',
+          href: null,
+          headerShown: false,
+        }}
+      />
     </Tabs>
   );
 }

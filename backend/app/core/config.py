@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     debug: bool = False
     api_version: str = "v1"
     
-    database_url: str = "postgresql+asyncpg://user:password@localhost/chesed_db"
+    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost/chesed_db"
     
     secret_key: str = Field(..., description="Secret key for JWT. Must be set via .env file for security.")
     algorithm: str = "HS256"

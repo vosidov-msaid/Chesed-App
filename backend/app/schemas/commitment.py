@@ -41,12 +41,22 @@ class ReviewCreate(ReviewBase):
     reviewed_user_id: UUID
 
 
+class UserMinimal(BaseModel):
+    id: UUID
+    first_name: str
+    last_name: str
+    
+    class Config:
+        from_attributes = True
+
+
 class ReviewResponse(ReviewBase):
     id: UUID
     commitment_id: UUID
     reviewer_id: UUID
     reviewed_user_id: UUID
     created_at: datetime
+    reviewer: Optional[UserMinimal] = None
 
     class Config:
         from_attributes = True

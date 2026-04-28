@@ -52,11 +52,17 @@ export default function UserProfileScreen() {
 
       try {
         const reviewsData = await api.getUserReviews?.(userId as string);
-        if (reviewsData) {
-          setReviews(reviewsData);
+        if (reviewsData && Array.isArray(reviewsData)) {
+          // Filter out reviews with missing reviewer data
+          const validReviews = reviewsData.filter(review => review.reviewer);
+          setReviews(validReviews);
+          if (validReviews.length < reviewsData.length) {
+            console.warn(`Filtered out ${reviewsData.length - validReviews.length} reviews with missing reviewer data`);
+          }
         }
       } catch (err) {
-        console.warn('Reviews endpoint may not exist:', err);
+        console.warn('Reviews endpoint may not exist or failed:', err);
+        setReviews([]);
       }
     } catch (error) {
       console.error('Failed to fetch user profile:', error);
@@ -146,7 +152,9 @@ export default function UserProfileScreen() {
                 <View style={styles.reviewHeader}>
                   <View>
                     <Text style={styles.reviewerName}>
-                      {`${review.reviewer.first_name} ${review.reviewer.last_name}`}
+                      {review.reviewer 
+                        ? `${review.reviewer.first_name} ${review.reviewer.last_name}`
+                        : 'Anonymous Reviewer'}
                     </Text>
                     <Text style={styles.reviewDate}>
                       {new Date(review.created_at).toLocaleDateString()}
