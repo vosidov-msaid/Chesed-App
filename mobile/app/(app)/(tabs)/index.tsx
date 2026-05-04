@@ -100,7 +100,7 @@ export default function HomeScreen() {
         setRefreshing(false);
       }
     },
-    []
+    [user?.id]
   );
 
   useEffect(() => {
