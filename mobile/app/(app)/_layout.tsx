@@ -97,6 +97,16 @@ export default function AppLayout() {
               color={color}
             />
           ),
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() => router.push('/(app)/my-requests')}
+              style={{ marginRight: 16 }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#3c6a35' }}>
+                My Requests
+              </Text>
+            </TouchableOpacity>
+          ),
         }}
       />
       <Tabs.Screen
