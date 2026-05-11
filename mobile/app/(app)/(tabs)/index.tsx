@@ -34,7 +34,7 @@ interface Request {
 
 
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 30;
 
 const CATEGORY_ICONS: { [key: string]: string } = {
   mobility: '🚗',
@@ -79,14 +79,25 @@ export default function HomeScreen() {
         }
 
         const data = await api.getRequests(offset, ITEMS_PER_PAGE);
+        console.log('🔍 API returned:', data.length, 'requests');
+        console.log('Current user ID:', user?.id);
+        if (data.length > 0) {
+          console.log('First request:', { 
+            id: data[0].id, 
+            requester_id: data[0].requester_id, 
+            status: data[0].status 
+          });
+        }
+        
         const filteredData = data
-          .filter(req => req.requester_id !== user?.id && req.status === 'open')
+          .filter(req => req.requester_id !== user?.id)
           .map(req => ({
             ...req,
             distance: location && req.latitude && req.longitude 
               ? calculateDistance(location.latitude, location.longitude, req.latitude, req.longitude)
               : undefined
           }));
+        console.log('📊 Filtered to:', filteredData.length, 'requests');
 
         if (offset === 0) {
           setRequests(filteredData);
