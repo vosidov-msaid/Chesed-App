@@ -8,6 +8,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -68,6 +72,9 @@ export default function HomeScreen() {
   const [skip, setSkip] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [maxDistance, setMaxDistance] = useState<string>('');
+  const [appliedDistance, setAppliedDistance] = useState<number | null>(null);
 
   const fetchRequests = useCallback(
     async (offset: number = 0) => {
@@ -154,6 +161,31 @@ export default function HomeScreen() {
     router.push('/post');
   };
 
+  const handleOpenFilter = () => {
+    setFilterModalVisible(true);
+  };
+
+  const handleApplyFilter = () => {
+    if (maxDistance.trim()) {
+      const distance = parseFloat(maxDistance);
+      if (!isNaN(distance) && distance > 0) {
+        setAppliedDistance(distance);
+        setFilterModalVisible(false);
+      }
+    }
+  };
+
+  const handleClearFilter = () => {
+    setMaxDistance('');
+    setAppliedDistance(null);
+    setFilterModalVisible(false);
+  };
+
+  const getDisplayRequests = () => {
+    if (!appliedDistance) return requests;
+    return requests.filter(req => req.distance !== undefined && req.distance <= appliedDistance);
+  };
+
   const getTimingDisplay = (request: Request) => {
     if (request.urgency === 'high' || request.urgency === 'urgent') {
       return { icon: '⚡', text: 'Now', color: '#a73b21' };
@@ -204,8 +236,8 @@ export default function HomeScreen() {
           <Text style={styles.sectionTitle}>Nearby Help Requests</Text>
           <Text style={styles.sectionSubtitle}>ACTIVE IN YOUR CIRCLE</Text>
         </View>
-        <TouchableOpacity>
-          <Text style={styles.filterButton}>Filter</Text>
+        <TouchableOpacity onPress={handleOpenFilter}>
+          <Text style={styles.filterButton}>{appliedDistance ? `Filter (${appliedDistance}mi)` : 'Filter'}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -312,7 +344,7 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <FlatList
-        data={requests}
+        data={getDisplayRequests()}
         keyExtractor={(item) => item.id}
         renderItem={renderRequestCard}
         onEndReached={handleLoadMore}
@@ -326,6 +358,48 @@ export default function HomeScreen() {
         scrollIndicatorInsets={{ right: 1 }}
         contentContainerStyle={styles.flatListContent}
       />
+
+      {/* Filter Modal */}
+      <Modal
+        visible={filterModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFilterModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Filter by Distance</Text>
+              <Text style={styles.modalSubtitle}>Show requests within this distance (miles)</Text>
+              
+              <TextInput
+                style={styles.distanceInput}
+                placeholder="Enter distance (e.g., 5)"
+                placeholderTextColor="#bdbdb0"
+                keyboardType="decimal-pad"
+                value={maxDistance}
+                onChangeText={setMaxDistance}
+                autoFocus
+              />
+
+              <View style={styles.modalButtonsContainer}>
+                <TouchableOpacity 
+                  style={styles.modalCancelButton}
+                  onPress={handleClearFilter}
+                >
+                  <Text style={styles.modalCancelButtonText}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.modalApplyButton}
+                  onPress={handleApplyFilter}
+                >
+                  <Text style={styles.modalApplyButtonText}>Apply</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -525,5 +599,70 @@ const styles = StyleSheet.create({
   emptySubText: {
     fontSize: 14,
     color: '#797c6f',
+  },
+
+  // Filter Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fafaf0',
+    borderRadius: 20,
+    padding: 24,
+    width: '85%',
+    gap: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#303429',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#797c6f',
+  },
+  distanceInput: {
+    borderWidth: 1,
+    borderColor: '#e2e4d4',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#303429',
+    backgroundColor: '#ffffff',
+  },
+  modalButtonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  modalCancelButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#e2e4d4',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+  },
+  modalCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#303429',
+  },
+  modalApplyButton: {
+    flex: 1,
+    backgroundColor: '#3c6a35',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  modalApplyButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });
