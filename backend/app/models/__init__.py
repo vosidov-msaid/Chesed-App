@@ -4,6 +4,7 @@ from app.models.category import Category
 from app.models.commitment import Commitment, CommitmentStatus
 from app.models.review import Review
 from app.models.email_verification import EmailVerification
+from app.models.message import Message
 
 __all__ = [
     "User",
@@ -17,4 +18,5 @@ __all__ = [
     "CommitmentStatus",
     "Review",
     "EmailVerification",
+    "Message",
 ]

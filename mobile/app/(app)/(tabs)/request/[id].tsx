@@ -162,6 +162,18 @@ export default function RequestDetailScreen() {
     );
   };
 
+  const handleOfferHelp = () => {
+    router.push({
+      pathname: '/chat',
+      params: {
+        requestId: id,
+        requesterId: request.requester_id,
+        requesterName: requester ? `${requester.first_name} ${requester.last_name}` : 'Community Member',
+        requestTitle: request.title,
+      },
+    });
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -271,7 +283,7 @@ export default function RequestDetailScreen() {
             </Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.helpButton}>
+          <TouchableOpacity style={styles.helpButton} onPress={handleOfferHelp}>
             <Text style={styles.helpButtonText}>Offer Help</Text>
           </TouchableOpacity>
         )}

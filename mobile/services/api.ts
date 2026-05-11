@@ -216,8 +216,12 @@ class ApiClient {
   }
 
   // Commitments endpoints
-  async createCommitment(commitmentData: any) {
-    const response = await this.api.post('/commitments/', commitmentData);
+  async createCommitment(requestId: string) {
+    const response = await this.api.post('/commitments/', null, {
+      params: {
+        request_id: requestId,
+      },
+    });
     return response.data;
   }
 
@@ -238,6 +242,21 @@ class ApiClient {
 
   async deleteCommitment(commitmentId: string) {
     await this.api.delete(`/commitments/${commitmentId}`);
+  }
+
+  // Messages endpoints
+  async sendMessage(commitmentId: string, text: string) {
+    const response = await this.api.post(`/messages/${commitmentId}`, {
+      text,
+    });
+    return response.data;
+  }
+
+  async getMessages(commitmentId: string, skip: number = 0, limit: number = 50) {
+    const response = await this.api.get(`/messages/${commitmentId}`, {
+      params: { skip, limit },
+    });
+    return response.data;
   }
 
   // Reviews endpoints

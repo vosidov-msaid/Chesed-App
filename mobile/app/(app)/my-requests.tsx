@@ -72,7 +72,15 @@ export default function MyRequestsScreen() {
         }
 
         const data = await api.getRequests(offset, ITEMS_PER_PAGE);
-        const myRequests = data.filter(req => req.requester_id === user?.id && req.status === 'open');
+        console.log('All requests from API:', data);
+        console.log('Current user ID:', user?.id);
+        
+        const myRequests = data.filter(req => {
+          console.log(`Checking request ${req.id}: requester_id=${req.requester_id}, user.id=${user?.id}, match=${req.requester_id === user?.id}`);
+          return req.requester_id === user?.id;
+        });
+
+        console.log('Filtered my requests:', myRequests);
 
         if (offset === 0) {
           setRequests(myRequests);

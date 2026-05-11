@@ -190,29 +190,78 @@ export default function HomeScreen() {
     setMessagesLoading(true);
     setMessagesModalVisible(true);
     try {
-      // Fetch all commitments for this user's requests
+      // Fetch all commitments
       const allCommitments = await api.getCommitments(0, 100);
       
-      // Filter commitments that are for this user's requests
-      const userRequestIds = new Set<string>();
+      // Get all requests to build request map
       const userRequestData = await api.getRequests(0, 100);
+      const requestMap = new Map<string, any>();
+      const userRequestIds = new Set<string>();
+      
       userRequestData.forEach((req: any) => {
+        requestMap.set(req.id, req);
         if (req.requester_id === user?.id) {
           userRequestIds.add(req.id);
         }
       });
 
-      // Get commitments for user's requests
-      const relevantMessages = allCommitments
-        .filter((commitment: any) => userRequestIds.has(commitment.request_id))
-        .map((commitment: any) => ({
-          id: commitment.id,
-          helperId: commitment.helper_id,
-          requestId: commitment.request_id,
-          notes: commitment.notes || 'No message',
-          status: commitment.status,
-          createdAt: commitment.created_at,
-        }));
+      // Filter commitments where:
+      // 1. User is the requester (posted the request), OR
+      // 2. User is the helper (offering help)
+      const relevantMessages = await Promise.all(
+        allCommitments
+          .filter((commitment: any) => {
+            const isRequester = userRequestIds.has(commitment.request_id);
+            const isHelper = commitment.helper_id === user?.id;
+            return isRequester || isHelper;
+          })
+          .map(async (commitment: any) => {
+            try {
+              const request = requestMap.get(commitment.request_id);
+              const isUserRequester = request?.requester_id === user?.id;
+              
+              // Get the other party's info (helper if user is requester, requester if user is helper)
+              let otherUserId: string;
+              if (isUserRequester) {
+                otherUserId = commitment.helper_id; // Show helper info
+              } else {
+                otherUserId = request?.requester_id; // Show requester info
+              }
+              
+              const otherUser = await api.getUser(otherUserId);
+              
+              return {
+                id: commitment.id,
+                otherUserId,
+                otherUserName: `${otherUser.first_name} ${otherUser.last_name}`,
+                otherUserBio: otherUser.bio || `ID: ${otherUser.id.substring(0, 8)}...`,
+                requestId: commitment.request_id,
+                requestTitle: request?.title || 'Request',
+                notes: commitment.notes || 'No message',
+                status: commitment.status,
+                createdAt: commitment.created_at,
+                otherUser,
+              };
+            } catch (err) {
+              const request = requestMap.get(commitment.request_id);
+              const isUserRequester = request?.requester_id === user?.id;
+              const otherUserId = isUserRequester ? commitment.helper_id : request?.requester_id;
+              
+              return {
+                id: commitment.id,
+                otherUserId,
+                otherUserName: `User ${otherUserId.substring(0, 8)}...`,
+                otherUserBio: 'ID: ' + otherUserId.substring(0, 8),
+                requestId: commitment.request_id,
+                requestTitle: request?.title || 'Request',
+                notes: commitment.notes || 'No message',
+                status: commitment.status,
+                createdAt: commitment.created_at,
+                otherUser: null,
+              };
+            }
+          })
+      );
 
       setMessages(relevantMessages);
     } catch (error) {
@@ -459,20 +508,79 @@ export default function HomeScreen() {
               data={messages}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
-                <View style={styles.messageItem}>
-                  <View style={styles.messageHeader}>
+                <TouchableOpacity
+                  style={styles.messageItem}
+                  onPress={() => {
+                    router.push({
+                      pathname: '/chat',
+                      params: {
+                        commitmentId: item.id,
+                        requestId: item.requestId,
+                        requesterId: item.otherUserId,
+                        requesterName: item.otherUserName,
+                        requestTitle: item.requestTitle,
+                        isFromMessages: 'true',
+                      },
+                    });
+                    setMessagesModalVisible(false);
+                  }}
+                >
+                  {/* User Profile Section */}
+                  <TouchableOpacity
+                    style={styles.messageProfileRow}
+                    onPress={() => {
+                      console.log('Navigating to profile with userId:', item.otherUserId);
+                      setMessagesModalVisible(false);
+                      router.push({
+                        pathname: '/(app)/user-profile',
+                        params: {
+                          userId: item.otherUserId,
+                        },
+                      });
+                    }}
+                    activeOpacity={0.7}
+                  >
                     <View style={styles.messageBadge}>
-                      <Text style={styles.messageBadgeEmoji}>💬</Text>
+                      <Text style={styles.messageBadgeEmoji}>👤</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.messageTime}>
-                        Helper ID: {item.helperId.substring(0, 8)}...
-                      </Text>
+                      <Text style={styles.messageHelperName}>{item.otherUserName}</Text>
+                      <Text style={styles.messageHelperBio}>{item.otherUserBio}</Text>
+                    </View>
+                    <Text style={styles.profileLink}>→</Text>
+                  </TouchableOpacity>
+
+                  {/* Request Info - Clickable */}
+                  <TouchableOpacity
+                   style={styles.messageRequestInfo}
+                   onPress={() => {
+                     router.push(`/(app)/(tabs)/request/${item.requestId}`);
+                     setMessagesModalVisible(false);
+                   }}
+                  >
+                   <Text style={styles.messageRequestLabel}>Request:</Text>
+                   <Text style={styles.messageRequestTitle} numberOfLines={1}>
+                     {item.requestTitle}
+                   </Text>
+                   <Text style={styles.requestDetailsLink}>View Details →</Text>
+                  </TouchableOpacity>
+
+                  {/* Message Content */}
+                  <View style={styles.messageContentWrapper}>
+                    <Text style={styles.messageContent}>{item.notes}</Text>
+                    <View style={styles.messageFooter}>
                       <Text style={styles.messageStatus}>{item.status}</Text>
+                      <Text style={styles.messageTime}>
+                        {new Date(item.createdAt).toLocaleDateString()}
+                      </Text>
                     </View>
                   </View>
-                  <Text style={styles.messageContent}>{item.notes}</Text>
-                </View>
+
+                  {/* Chat Button */}
+                  <View style={styles.messageChatButton}>
+                    <Text style={styles.messageChatButtonText}>💬 View Chat</Text>
+                  </View>
+                </TouchableOpacity>
               )}
               contentContainerStyle={styles.messagesListContent}
             />
@@ -872,11 +980,14 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#3c6a35',
   },
-  messageHeader: {
+  messageProfileRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 12,
     marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f4ed',
   },
   messageBadge: {
     width: 40,
@@ -889,20 +1000,81 @@ const styles = StyleSheet.create({
   messageBadgeEmoji: {
     fontSize: 20,
   },
-  messageTime: {
+  messageHelperName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#303429',
+  },
+  messageHelperBio: {
     fontSize: 12,
     color: '#797c6f',
-    fontWeight: '600',
+    marginTop: 2,
   },
-  messageStatus: {
-    fontSize: 12,
+  profileLink: {
+    fontSize: 16,
     color: '#3c6a35',
     fontWeight: '600',
-    marginTop: 2,
+  },
+  messageRequestInfo: {
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f4ed',
+  },
+  messageRequestLabel: {
+    fontSize: 11,
+    color: '#797c6f',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  messageRequestTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#303429',
+    marginBottom: 6,
+  },
+  requestDetailsLink: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#3c6a35',
+  },
+  messageContentWrapper: {
+    marginBottom: 12,
   },
   messageContent: {
     fontSize: 14,
     color: '#303429',
     lineHeight: 20,
+    marginBottom: 8,
+  },
+  messageFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  messageStatus: {
+    fontSize: 11,
+    color: '#3c6a35',
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  messageTime: {
+    fontSize: 11,
+    color: '#797c6f',
+  },
+  messageChatButton: {
+    backgroundColor: '#f0f4ed',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#3c6a35',
+  },
+  messageChatButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3c6a35',
   },
 });

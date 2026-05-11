@@ -141,10 +141,18 @@ async def update_commitment(
             detail="Commitment not found",
         )
 
-    if commitment.helper_id != current_user.id:
+    # Allow both helper and requester (request owner) to update commitment
+    request_stmt = select(Request).where(Request.id == commitment.request_id)
+    request_result = await db.execute(request_stmt)
+    request_obj = request_result.scalar_one_or_none()
+    
+    is_helper = commitment.helper_id == current_user.id
+    is_requester = request_obj and request_obj.requester_id == current_user.id
+    
+    if not (is_helper or is_requester):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the helper can update this commitment",
+            detail="Only the helper or requester can update this commitment",
         )
 
     update_data = commitment_update.model_dump(exclude_unset=True)

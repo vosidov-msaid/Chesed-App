@@ -7,7 +7,7 @@ from pathlib import Path
 from app.core.config import settings
 from app.core.init_db import init_admin_user
 from app.services.email_service import init_email_service
-from app.api import auth, users, requests, commitments, reviews, health, websocket
+from app.api import auth, users, requests, commitments, reviews, health, websocket, messages
 
 
 @asynccontextmanager
@@ -63,6 +63,7 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(requests.router)
 app.include_router(commitments.router)
+app.include_router(messages.router)
 app.include_router(reviews.router)
 app.include_router(websocket.router)
 
