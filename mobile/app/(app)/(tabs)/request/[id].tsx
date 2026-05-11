@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import api from '../../../../services/api';
 import { useGeolocation } from '../../../../utils/useGeolocation';
+import { calculateDistance } from '../../../../utils/distance';
 import { useAuthStore } from '../../../../store/authStore';
 
 const CATEGORY_ICONS: { [key: string]: string } = {
@@ -39,23 +40,29 @@ const CATEGORY_COLORS: { [key: string]: string } = {
 export default function RequestDetailScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { id } = useLocalSearchParams();
+  const { id, distance: distanceParam } = useLocalSearchParams();
   const { location, requestLocation } = useGeolocation();
   const [request, setRequest] = useState<any>(null);
   const [requester, setRequester] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  useEffect(() => {
-    fetchRequest();
-    requestLocation();
-  }, [id]);
-
-  const fetchRequest = async () => {
+  const fetchRequest = useCallback(async () => {
     try {
       setIsLoading(true);
       const data = await api.getRequest(id as string);
-      setRequest(data);
+      
+      // Use distance from route params if available, otherwise calculate from current location
+      const requestWithDistance = {
+        ...data,
+        distance: distanceParam 
+          ? parseFloat(distanceParam as string)
+          : (location && data.latitude && data.longitude
+              ? calculateDistance(location.latitude, location.longitude, data.latitude, data.longitude)
+              : undefined)
+      };
+      
+      setRequest(requestWithDistance);
       
       // Fetch requester information
       if (data.requester_id) {
@@ -73,7 +80,14 @@ export default function RequestDetailScreen() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [id, distanceParam, location, router]);
+
+  useEffect(() => {
+    fetchRequest();
+  }, [fetchRequest]);
+
+  // Location will be available from home page navigation
+  // No need to request it again to avoid clearing cached location
 
   if (isLoading) {
     return (
@@ -94,26 +108,11 @@ export default function RequestDetailScreen() {
   const categoryColor = CATEGORY_COLORS[request.category] || '#3c6a35';
   const categoryIcon = CATEGORY_ICONS[request.category] || '📌';
 
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 3959;
-    const dLat = (lat2 - lat1) * (Math.PI / 180);
-    const dLon = (lon2 - lon1) * (Math.PI / 180);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * (Math.PI / 180)) *
-        Math.cos(lat2 * (Math.PI / 180)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return Math.round(R * c * 10) / 10;
-  };
-
   const getDistanceText = () => {
-    if (!location || !request.latitude || !request.longitude) {
-      return 'Distance not available';
+    if (request.distance !== undefined) {
+      return `${request.distance} miles away`;
     }
-    const distance = calculateDistance(location.latitude, location.longitude, request.latitude, request.longitude);
-    return `${distance} miles away`;
+    return 'Distance not available';
   };
 
   const getTimingDisplay = () => {

@@ -14,6 +14,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import api from '../../../services/api';
 import { useAuthStore } from '../../../store/authStore';
 import { useGeolocation } from '../../../utils/useGeolocation';
+import { calculateDistance } from '../../../utils/distance';
 
 interface Request {
   id: string;
@@ -28,6 +29,7 @@ interface Request {
   latitude: number;
   longitude: number;
   scheduled_at?: string;
+  distance?: number; // Cached distance in miles
 }
 
 
@@ -77,7 +79,14 @@ export default function HomeScreen() {
         }
 
         const data = await api.getRequests(offset, ITEMS_PER_PAGE);
-        const filteredData = data.filter(req => req.requester_id !== user?.id && req.status === 'open');
+        const filteredData = data
+          .filter(req => req.requester_id !== user?.id && req.status === 'open')
+          .map(req => ({
+            ...req,
+            distance: location && req.latitude && req.longitude 
+              ? calculateDistance(location.latitude, location.longitude, req.latitude, req.longitude)
+              : undefined
+          }));
 
         if (offset === 0) {
           setRequests(filteredData);
@@ -100,7 +109,7 @@ export default function HomeScreen() {
         setRefreshing(false);
       }
     },
-    [user?.id]
+    [user?.id, location]
   );
 
   useEffect(() => {
@@ -132,20 +141,6 @@ export default function HomeScreen() {
 
   const handleStartRequest = () => {
     router.push('/post');
-  };
-
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 3959; // Earth's radius in miles
-    const dLat = (lat2 - lat1) * (Math.PI / 180);
-    const dLon = (lon2 - lon1) * (Math.PI / 180);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * (Math.PI / 180)) *
-        Math.cos(lat2 * (Math.PI / 180)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return Math.round(R * c * 10) / 10; // Round to 1 decimal place
   };
 
   const getTimingDisplay = (request: Request) => {
@@ -211,16 +206,18 @@ export default function HomeScreen() {
     const timing = getTimingDisplay(item);
     
     let distanceText = 'Near you';
-    if (location && item.latitude && item.longitude) {
-      const dist = calculateDistance(location.latitude, location.longitude, item.latitude, item.longitude);
-      distanceText = `${dist} mi away`;
+    if (item.distance !== undefined) {
+      distanceText = `${item.distance} mi away`;
     }
 
     return (
       <TouchableOpacity
         style={[styles.card, { borderLeftColor: categoryColor }]}
-        onPress={() => router.push(`/(app)/(tabs)/request/${item.id}`)}
-      >
+       onPress={() => router.push({
+         pathname: `/(app)/(tabs)/request/${item.id}`,
+         params: { distance: item.distance }
+       })}
+     >
         {/* Card Header: Category Badge + Distance */}
         <View style={styles.cardHeader}>
           <View
@@ -261,7 +258,10 @@ export default function HomeScreen() {
         {/* View Details Button */}
         <TouchableOpacity
           style={styles.viewDetailsButton}
-          onPress={() => router.push(`/(app)/(tabs)/request/${item.id}`)}
+          onPress={() => router.push({
+            pathname: `/(app)/(tabs)/request/${item.id}`,
+            params: { distance: item.distance }
+          })}
         >
           <Text style={styles.viewDetailsButtonText}>View Details</Text>
         </TouchableOpacity>
