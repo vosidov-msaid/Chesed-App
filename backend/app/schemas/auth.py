@@ -62,3 +62,14 @@ class VerifyEmailResponse(BaseModel):
     message: str
     is_verified: bool
 
+
+class RefreshTokenRequest(BaseModel):
+    """Request body for token refresh (optional, can use existing token)."""
+    pass
+
+
+class LogoutResponse(BaseModel):
+    """Response after logout."""
+    message: str
+    status: str = "success"
+

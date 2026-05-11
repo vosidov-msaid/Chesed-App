@@ -14,6 +14,8 @@ from app.schemas.auth import (
     SendVerificationEmailRequest,
     VerifyEmailRequest,
     VerifyEmailResponse,
+    RefreshTokenRequest,
+    LogoutResponse,
 )
 from app.core.security import (
     hash_password,
@@ -270,3 +272,45 @@ async def get_me(
         "is_verified": current_user.is_verified,
     }
 
+
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh_token(
+    current_user: User = Depends(get_current_user),
+) -> TokenResponse:
+    """
+    Refresh access token.
+    Requires valid Bearer token. Returns a new token with extended expiry.
+    Use this before your current token expires to maintain uninterrupted access.
+    
+    Usage: Send your current token in Authorization header to get a new one.
+    """
+    # Create a new access token
+    access_token = create_access_token(str(current_user.id))
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+    )
+
+
+@router.post("/logout", response_model=LogoutResponse)
+async def logout(
+    current_user: User = Depends(get_current_user),
+) -> LogoutResponse:
+    """
+    Logout endpoint (client-side token invalidation).
+    
+    Note: JWT tokens are stateless, so logout only affects client-side state.
+    The token will remain valid until its expiry (7 days). For production,
+    consider implementing a token blacklist in Redis for immediate invalidation.
+    
+    Client should:
+    1. Call this endpoint to signal logout intent
+    2. Delete the token from local storage/secure storage
+    3. Redirect user to login screen
+    
+    Requires valid Bearer token.
+    """
+    return LogoutResponse(
+        message=f"Successfully logged out {current_user.first_name}. Please delete your local token.",
+        status="success",
+    )
