@@ -18,6 +18,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import api from '../../../services/api';
 import { useAuthStore } from '../../../store/authStore';
 import { useGeolocation } from '../../../utils/useGeolocation';
+import { useWebSocket } from '../../../utils/useWebSocket';
 import { calculateDistance } from '../../../utils/distance';
 
 interface Request {
@@ -66,6 +67,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { location, isLoading: locationLoading, requestLocation } = useGeolocation();
+  const { isConnected, messages: wsMessages } = useWebSocket();
   const [requests, setRequests] = useState<Request[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -75,6 +77,9 @@ export default function HomeScreen() {
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [maxDistance, setMaxDistance] = useState<string>('');
   const [appliedDistance, setAppliedDistance] = useState<number | null>(null);
+  const [messagesModalVisible, setMessagesModalVisible] = useState(false);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [messagesLoading, setMessagesLoading] = useState(false);
 
   const fetchRequests = useCallback(
     async (offset: number = 0) => {
@@ -181,6 +186,62 @@ export default function HomeScreen() {
     setFilterModalVisible(false);
   };
 
+  const handleOpenMessages = async () => {
+    setMessagesLoading(true);
+    setMessagesModalVisible(true);
+    try {
+      // Fetch all commitments for this user's requests
+      const allCommitments = await api.getCommitments(0, 100);
+      
+      // Filter commitments that are for this user's requests
+      const userRequestIds = new Set<string>();
+      const userRequestData = await api.getRequests(0, 100);
+      userRequestData.forEach((req: any) => {
+        if (req.requester_id === user?.id) {
+          userRequestIds.add(req.id);
+        }
+      });
+
+      // Get commitments for user's requests
+      const relevantMessages = allCommitments
+        .filter((commitment: any) => userRequestIds.has(commitment.request_id))
+        .map((commitment: any) => ({
+          id: commitment.id,
+          helperId: commitment.helper_id,
+          requestId: commitment.request_id,
+          notes: commitment.notes || 'No message',
+          status: commitment.status,
+          createdAt: commitment.created_at,
+        }));
+
+      setMessages(relevantMessages);
+    } catch (error) {
+      console.error('Failed to fetch messages:', error);
+    } finally {
+      setMessagesLoading(false);
+    }
+  };
+
+  // Handle real-time WebSocket messages
+  useEffect(() => {
+    wsMessages.forEach((msg) => {
+      if (msg.type === 'message_created') {
+        setMessages((prev) => [...prev, msg.data]);
+        console.log('✅ New message received:', msg.data);
+      } else if (msg.type === 'message_deleted') {
+        setMessages((prev) =>
+          prev.filter((m) => m.id !== msg.data.commitment_id)
+        );
+        console.log('❌ Message deleted:', msg.data.commitment_id);
+      } else if (msg.type === 'message_updated') {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === msg.data.id ? msg.data : m))
+        );
+        console.log('📝 Message updated:', msg.data);
+      }
+    });
+  }, [wsMessages]);
+
   const getDisplayRequests = () => {
     if (!appliedDistance) return requests;
     return requests.filter(req => req.distance !== undefined && req.distance <= appliedDistance);
@@ -201,16 +262,24 @@ export default function HomeScreen() {
 
   const renderHeader = () => (
     <View>
-      {/* Location Section */}
+      {/* Location Section with Messages Button */}
       <View style={styles.locationSection}>
-        <Text style={styles.locationLabel}>📍 Your Location</Text>
-        {locationLoading ? (
-          <ActivityIndicator size="small" color="#3c6a35" />
-        ) : (
-          <Text style={styles.locationText}>
-            {location?.address || 'Getting location...'}
-          </Text>
-        )}
+        <View style={styles.locationHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.locationLabel}>📍 Your Location</Text>
+            {locationLoading ? (
+              <ActivityIndicator size="small" color="#3c6a35" />
+            ) : (
+              <Text style={styles.locationText}>
+                {location?.address || 'Getting location...'}
+              </Text>
+            )}
+          </View>
+          <TouchableOpacity style={styles.messagesButton} onPress={handleOpenMessages}>
+            <Text style={styles.messagesButtonIcon}>💬</Text>
+            {/* <Text style={styles.messagesButtonText}>Messages</Text> */}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Hero Section - Only show if no requests */}
@@ -358,6 +427,58 @@ export default function HomeScreen() {
         scrollIndicatorInsets={{ right: 1 }}
         contentContainerStyle={styles.flatListContent}
       />
+
+      {/* Messages Modal */}
+      <Modal
+        visible={messagesModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setMessagesModalVisible(false)}
+      >
+        <SafeAreaView style={styles.messagesModalContainer}>
+          <View style={styles.messagesModalHeader}>
+            <Text style={styles.messagesModalTitle}>Messages</Text>
+            <TouchableOpacity onPress={() => setMessagesModalVisible(false)}>
+              <Text style={styles.messagesModalCloseButton}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          {messagesLoading ? (
+            <View style={styles.messagesLoadingContainer}>
+              <ActivityIndicator size="large" color="#3c6a35" />
+            </View>
+          ) : messages.length === 0 ? (
+            <View style={styles.messagesEmptyContainer}>
+              <Text style={styles.messagesEmptyText}>No messages yet</Text>
+              <Text style={styles.messagesEmptySubText}>
+                When helpers reach out about your requests, they'll appear here
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={messages}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <View style={styles.messageItem}>
+                  <View style={styles.messageHeader}>
+                    <View style={styles.messageBadge}>
+                      <Text style={styles.messageBadgeEmoji}>💬</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.messageTime}>
+                        Helper ID: {item.helperId.substring(0, 8)}...
+                      </Text>
+                      <Text style={styles.messageStatus}>{item.status}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.messageContent}>{item.notes}</Text>
+                </View>
+              )}
+              contentContainerStyle={styles.messagesListContent}
+            />
+          )}
+        </SafeAreaView>
+      </Modal>
 
       {/* Filter Modal */}
       <Modal
@@ -664,5 +785,124 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#ffffff',
+  },
+
+  // Location Section Header
+  locationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  messagesButton: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#e2e4d4',
+  },
+  messagesButtonIcon: {
+    fontSize: 16,
+  },
+  messagesButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#303429',
+  },
+
+  // Messages Modal Styles
+  messagesModalContainer: {
+    flex: 1,
+    backgroundColor: '#fafaf0',
+  },
+  messagesModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e4d4',
+  },
+  messagesModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#303429',
+  },
+  messagesModalCloseButton: {
+    fontSize: 24,
+    color: '#797c6f',
+    fontWeight: '600',
+  },
+  messagesLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  messagesEmptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  messagesEmptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#303429',
+    marginBottom: 8,
+  },
+  messagesEmptySubText: {
+    fontSize: 14,
+    color: '#797c6f',
+    textAlign: 'center',
+  },
+  messagesListContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  messageItem: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3c6a35',
+  },
+  messageHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 12,
+  },
+  messageBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f0f4ed',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  messageBadgeEmoji: {
+    fontSize: 20,
+  },
+  messageTime: {
+    fontSize: 12,
+    color: '#797c6f',
+    fontWeight: '600',
+  },
+  messageStatus: {
+    fontSize: 12,
+    color: '#3c6a35',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  messageContent: {
+    fontSize: 14,
+    color: '#303429',
+    lineHeight: 20,
   },
 });
