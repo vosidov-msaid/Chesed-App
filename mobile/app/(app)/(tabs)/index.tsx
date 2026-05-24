@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import api from '../../../services/api';
 import { useAuthStore } from '../../../store/authStore';
+import { usePreferenceStore } from '../../../store/preferenceStore';
 import { useGeolocation } from '../../../utils/useGeolocation';
 import { useWebSocket } from '../../../utils/useWebSocket';
 import { calculateDistance } from '../../../utils/distance';
@@ -66,6 +67,7 @@ const CATEGORY_COLORS: { [key: string]: string } = {
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
+  const { hasSeenHint, loadPreferences, markHintAsSeen } = usePreferenceStore();
   const { location, isLoading: locationLoading, requestLocation } = useGeolocation();
   const { isConnected, messages: wsMessages } = useWebSocket();
   const [requests, setRequests] = useState<Request[]>([]);
@@ -78,8 +80,17 @@ export default function HomeScreen() {
   const [maxDistance, setMaxDistance] = useState<string>('');
   const [appliedDistance, setAppliedDistance] = useState<number | null>(null);
   const [messagesModalVisible, setMessagesModalVisible] = useState(false);
+  const [hintModalVisible, setHintModalVisible] = useState(false);
+  const [hintStep, setHintStep] = useState(0);
   const [messages, setMessages] = useState<any[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [highlightLayout, setHighlightLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+
+  // Refs for highlight targets
+  const locationSectionRef = useRef<View | null>(null);
+  const messagesButtonRef = useRef<View | null>(null);
+  const requestsContainerRef = useRef<View | null>(null);
+  const filterButtonRef = useRef<View | null>(null);
 
   const fetchRequests = useCallback(
     async (offset: number = 0) => {
@@ -102,8 +113,8 @@ export default function HomeScreen() {
         }
         
         const filteredData = data
-          .filter(req => req.requester_id !== user?.id)
-          .map(req => ({
+          .filter((req: any) => req.requester_id !== user?.id)
+          .map((req: any) => ({
             ...req,
             distance: location && req.latitude && req.longitude 
               ? calculateDistance(location.latitude, location.longitude, req.latitude, req.longitude)
@@ -139,6 +150,23 @@ export default function HomeScreen() {
     fetchRequests(0);
     requestLocation();
   }, []);
+
+  // Load preferences and show hint on first load after authorization
+  useEffect(() => {
+    const initializeHint = async () => {
+      if (user?.id) {
+        await loadPreferences();
+      }
+    };
+    initializeHint();
+  }, [user?.id, loadPreferences]);
+
+  // Show hint modal if user hasn't seen it yet
+  useEffect(() => {
+    if (user?.id && !hasSeenHint && !hintModalVisible) {
+      setHintModalVisible(true);
+    }
+  }, [user?.id, hasSeenHint]);
 
   useFocusEffect(
     useCallback(() => {
@@ -185,6 +213,88 @@ export default function HomeScreen() {
     setAppliedDistance(null);
     setFilterModalVisible(false);
   };
+
+  const handleCloseHint = async () => {
+    setHintModalVisible(false);
+    setHintStep(0);
+    await markHintAsSeen();
+  };
+
+  const handleNextHintStep = () => {
+    if (hintStep < 3) {
+      setHintStep(hintStep + 1);
+    }
+  };
+
+  const handlePrevHintStep = () => {
+    if (hintStep > 0) {
+      setHintStep(hintStep - 1);
+    }
+  };
+
+  const handleSkipHint = async () => {
+    setHintModalVisible(false);
+    setHintStep(0);
+    setHighlightLayout(null);
+    await markHintAsSeen();
+  };
+
+  const measureElement = (ref: React.RefObject<any>) => {
+    return new Promise<{ x: number; y: number; width: number; height: number } | null>((resolve) => {
+      if (ref.current && ref.current.measureInWindow) {
+        try {
+          ref.current.measureInWindow((x: number, y: number, width: number, height: number) => {
+            resolve({ x, y, width, height });
+          });
+        } catch (error) {
+          console.warn('Error measuring element:', error);
+          resolve(null);
+        }
+      } else {
+        resolve(null);
+      }
+    });
+  };
+
+  // Update highlight based on hint step
+  useEffect(() => {
+    const updateHighlight = async () => {
+      let layout = null;
+      
+      if (hintStep === 0) {
+        // Highlight location section
+        layout = await measureElement(locationSectionRef);
+      } else if (hintStep === 1) {
+        // Highlight requests container area
+        layout = await measureElement(requestsContainerRef);
+      } else if (hintStep === 2) {
+        // Highlight messages button
+        layout = await measureElement(messagesButtonRef);
+      } else if (hintStep === 3) {
+        // Highlight filter button
+        layout = await measureElement(filterButtonRef);
+      }
+
+      // Only update if we have a valid layout
+      if (layout && layout.width > 0 && layout.height > 0) {
+        setHighlightLayout({ 
+          x: layout.x, 
+          y: Math.max(0, layout.y - 10), 
+          width: layout.width, 
+          height: layout.height + 20 
+        });
+      } else {
+        // Clear highlight if measurement fails
+        setHighlightLayout(null);
+      }
+    };
+
+    if (hintModalVisible) {
+      // Delay to ensure elements are rendered
+      const timer = setTimeout(updateHighlight, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [hintStep, hintModalVisible]);
 
   const handleOpenMessages = async () => {
     setMessagesLoading(true);
@@ -312,7 +422,7 @@ export default function HomeScreen() {
   const renderHeader = () => (
     <View>
       {/* Location Section with Messages Button */}
-      <View style={styles.locationSection}>
+      <View style={styles.locationSection} ref={locationSectionRef}>
         <View style={styles.locationHeader}>
           <View style={{ flex: 1 }}>
             <Text style={styles.locationLabel}>📍 Your Location</Text>
@@ -324,7 +434,7 @@ export default function HomeScreen() {
               </Text>
             )}
           </View>
-          <TouchableOpacity style={styles.messagesButton} onPress={handleOpenMessages}>
+          <TouchableOpacity style={styles.messagesButton} ref={messagesButtonRef} onPress={handleOpenMessages}>
             <Text style={styles.messagesButtonIcon}>💬</Text>
             {/* <Text style={styles.messagesButtonText}>Messages</Text> */}
           </TouchableOpacity>
@@ -354,7 +464,7 @@ export default function HomeScreen() {
           <Text style={styles.sectionTitle}>Nearby Help Requests</Text>
           <Text style={styles.sectionSubtitle}>ACTIVE IN YOUR CIRCLE</Text>
         </View>
-        <TouchableOpacity onPress={handleOpenFilter}>
+        <TouchableOpacity ref={filterButtonRef} onPress={handleOpenFilter}>
           <Text style={styles.filterButton}>{appliedDistance ? `Filter (${appliedDistance}mi)` : 'Filter'}</Text>
         </TouchableOpacity>
       </View>
@@ -375,8 +485,8 @@ export default function HomeScreen() {
       <TouchableOpacity
         style={[styles.card, { borderLeftColor: categoryColor }]}
        onPress={() => router.push({
-         pathname: `/(app)/(tabs)/request/${item.id}`,
-         params: { distance: item.distance }
+         pathname: '/request/[id]' as any,
+         params: { id: item.id, distance: item.distance }
        })}
      >
         {/* Card Header: Category Badge + Distance */}
@@ -420,8 +530,8 @@ export default function HomeScreen() {
         <TouchableOpacity
           style={styles.viewDetailsButton}
           onPress={() => router.push({
-            pathname: `/(app)/(tabs)/request/${item.id}`,
-            params: { distance: item.distance }
+            pathname: '/request/[id]' as any,
+            params: { id: item.id, distance: item.distance }
           })}
         >
           <Text style={styles.viewDetailsButtonText}>View Details</Text>
@@ -461,21 +571,23 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <FlatList
-        data={getDisplayRequests()}
-        keyExtractor={(item) => item.id}
-        renderItem={renderRequestCard}
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.5}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
-        ListHeaderComponent={renderHeader}
-        ListFooterComponent={renderFooter}
-        ListEmptyComponent={renderEmpty}
-        scrollIndicatorInsets={{ right: 1 }}
-        contentContainerStyle={styles.flatListContent}
-      />
+      <View style={{ flex: 1 }} ref={requestsContainerRef}>
+        <FlatList<Request>
+          data={getDisplayRequests()}
+          keyExtractor={(item) => item.id}
+          renderItem={renderRequestCard}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
+          ListHeaderComponent={renderHeader}
+          ListFooterComponent={renderFooter}
+          ListEmptyComponent={renderEmpty}
+          scrollIndicatorInsets={{ right: 1 }}
+          contentContainerStyle={styles.flatListContent}
+        />
+      </View>
 
       {/* Messages Modal */}
       <Modal
@@ -627,6 +739,229 @@ export default function HomeScreen() {
               </View>
             </View>
           </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* Hint Modal - Teaching users how the app works */}
+      <Modal
+        visible={hintModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCloseHint}
+      >
+        <View style={styles.hintScreenOverlay}>
+          {/* Spotlight Overlay */}
+          {highlightLayout && (
+            <View
+              style={[
+                styles.spotlightOverlay,
+                {
+                  top: highlightLayout.y,
+                  left: highlightLayout.x,
+                  width: highlightLayout.width,
+                  height: highlightLayout.height,
+                },
+              ]}
+            />
+          )}
+
+          {/* Semi-transparent dark overlay */}
+          <View style={styles.darkOverlay} />
+
+          {/* Hint Card */}
+          <View style={styles.hintCardWrapper}>
+            {/* Step 0: Location */}
+            {hintStep === 0 && (
+              <View style={styles.hintModalContent}>
+                <View style={styles.hintStepIndicator}>
+                  <Text style={styles.hintStepNumber}>1</Text>
+                </View>
+
+                <Text style={styles.hintTitle}>Your Location</Text>
+
+                <View style={styles.hintCardContainer}>
+                  <View style={styles.hintCard}>
+                    <Text style={styles.hintCardSubtitle}>
+                      This shows your current location. We use it to find nearby requests from your community.
+                    </Text>
+                    <View style={styles.dotIndicators}>
+                      {[0, 1, 2, 3].map((dot) => (
+                        <View
+                          key={dot}
+                          style={[
+                            styles.dot,
+                            dot === 0 && styles.dotActive,
+                          ]}
+                        />
+                      ))}
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.hintButtonContainer}>
+                  <TouchableOpacity
+                    style={styles.hintSkipButton}
+                    onPress={handleSkipHint}
+                  >
+                    <Text style={styles.hintSkipButtonText}>Skip</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.hintNextButton}
+                    onPress={handleNextHintStep}
+                  >
+                    <Text style={styles.hintNextButtonText}>Next →</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* Step 1: Browse Requests */}
+            {hintStep === 1 && (
+              <View style={styles.hintModalContent}>
+                <View style={styles.hintStepIndicator}>
+                  <Text style={styles.hintStepNumber}>2</Text>
+                </View>
+
+                <Text style={styles.hintTitle}>Browse Help Requests</Text>
+
+                <View style={styles.hintCardContainer}>
+                  <View style={styles.hintCard}>
+                    <Text style={styles.hintCardSubtitle}>
+                      These are requests from people in your community who need help. Each card shows the category, distance, and timing.
+                    </Text>
+                    <View style={styles.dotIndicators}>
+                      {[0, 1, 2, 3].map((dot) => (
+                        <View
+                          key={dot}
+                          style={[
+                            styles.dot,
+                            dot === 1 && styles.dotActive,
+                          ]}
+                        />
+                      ))}
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.hintButtonContainer}>
+                  <TouchableOpacity
+                    style={styles.hintBackButton}
+                    onPress={handlePrevHintStep}
+                  >
+                    <Text style={styles.hintBackButtonText}>← Back</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.hintSkipButton}
+                    onPress={handleSkipHint}
+                  >
+                    <Text style={styles.hintSkipButtonText}>Skip</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.hintNextButton}
+                    onPress={handleNextHintStep}
+                  >
+                    <Text style={styles.hintNextButtonText}>Next →</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* Step 2: Messages */}
+            {hintStep === 2 && (
+              <View style={styles.hintModalContent}>
+                <View style={styles.hintStepIndicator}>
+                  <Text style={styles.hintStepNumber}>3</Text>
+                </View>
+
+                <Text style={styles.hintTitle}>View Your Messages</Text>
+
+                <View style={styles.hintCardContainer}>
+                  <View style={styles.hintCard}>
+                    <Text style={styles.hintCardSubtitle}>
+                      Tap this button to see all your messages and conversations with helpers and people you're helping.
+                    </Text>
+                    <View style={styles.dotIndicators}>
+                      {[0, 1, 2, 3].map((dot) => (
+                        <View
+                          key={dot}
+                          style={[
+                            styles.dot,
+                            dot === 2 && styles.dotActive,
+                          ]}
+                        />
+                      ))}
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.hintButtonContainer}>
+                  <TouchableOpacity
+                    style={styles.hintBackButton}
+                    onPress={handlePrevHintStep}
+                  >
+                    <Text style={styles.hintBackButtonText}>← Back</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.hintSkipButton}
+                    onPress={handleSkipHint}
+                  >
+                    <Text style={styles.hintSkipButtonText}>Skip</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.hintNextButton}
+                    onPress={handleNextHintStep}
+                  >
+                    <Text style={styles.hintNextButtonText}>Next →</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* Step 3: Filter */}
+            {hintStep === 3 && (
+              <View style={styles.hintModalContent}>
+                <View style={styles.hintStepIndicator}>
+                  <Text style={styles.hintStepNumber}>4</Text>
+                </View>
+
+                <Text style={styles.hintTitle}>Filter Requests</Text>
+
+                <View style={styles.hintCardContainer}>
+                  <View style={styles.hintCard}>
+                    <Text style={styles.hintCardSubtitle}>
+                      Use this button to filter requests by distance. This helps you find help that's nearby!
+                    </Text>
+                    <View style={styles.dotIndicators}>
+                      {[0, 1, 2, 3].map((dot) => (
+                        <View
+                          key={dot}
+                          style={[
+                            styles.dot,
+                            dot === 3 && styles.dotActive,
+                          ]}
+                        />
+                      ))}
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.hintButtonContainer}>
+                  <TouchableOpacity
+                    style={styles.hintBackButton}
+                    onPress={handlePrevHintStep}
+                  >
+                    <Text style={styles.hintBackButtonText}>← Back</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.hintCloseButton}
+                    onPress={handleCloseHint}
+                  >
+                    <Text style={styles.hintCloseButtonText}>Let's Get Started</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
         </View>
       </Modal>
     </SafeAreaView>
@@ -1076,5 +1411,161 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#3c6a35',
+  },
+
+  // Hint Modal Styles
+  hintScreenOverlay: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    position: 'relative',
+  },
+  spotlightOverlay: {
+    position: 'absolute',
+    backgroundColor: 'rgba(60, 106, 53, 0.15)',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#3c6a35',
+    zIndex: 1,
+  },
+  darkOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    zIndex: 0,
+  },
+  hintCardWrapper: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 40,
+    zIndex: 10,
+  },
+  hintModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  hintModalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 20,
+    width: '100%',
+    maxWidth: 360,
+    gap: 16,
+    alignItems: 'center',
+  },
+  hintStepIndicator: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#3c6a35',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  hintStepNumber: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  hintTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#303429',
+    textAlign: 'center',
+  },
+  hintCardContainer: {
+    width: '100%',
+    paddingHorizontal: 4,
+  },
+  hintCard: {
+    backgroundColor: '#f5f5f0',
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e2e4d4',
+  },
+  hintCardSubtitle: {
+    fontSize: 13,
+    color: '#303429',
+    textAlign: 'center',
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  dotIndicators: {
+    flexDirection: 'row',
+    gap: 6,
+    justifyContent: 'center',
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#d0cfc9',
+  },
+  dotActive: {
+    backgroundColor: '#3c6a35',
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+  },
+  hintButtonContainer: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+  },
+  hintSkipButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  hintSkipButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#797c6f',
+  },
+  hintBackButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e4d4',
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  hintBackButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#303429',
+  },
+  hintNextButton: {
+    backgroundColor: '#3c6a35',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  hintNextButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  hintCloseButton: {
+    backgroundColor: '#3c6a35',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    minWidth: 150,
+  },
+  hintCloseButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });
