@@ -12,6 +12,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -85,6 +86,7 @@ export default function HomeScreen() {
   const [messages, setMessages] = useState<any[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [highlightLayout, setHighlightLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const pulseAnim = useRef(new Animated.Value(0)).current;
 
   // Refs for highlight targets
   const locationSectionRef = useRef<View | null>(null);
@@ -268,20 +270,36 @@ export default function HomeScreen() {
         // Highlight requests container area
         layout = await measureElement(requestsContainerRef);
       } else if (hintStep === 2) {
-        // Highlight messages button
+        // Highlight messages button - add small padding
         layout = await measureElement(messagesButtonRef);
+        if (layout) {
+          layout = {
+            x: layout.x - 15,
+            y: Math.max(0, layout.y - 15),
+            width: layout.width + 30,
+            height: layout.height + 30,
+          };
+        }
       } else if (hintStep === 3) {
-        // Highlight filter button
+        // Highlight filter button - add small padding
         layout = await measureElement(filterButtonRef);
+        if (layout) {
+          layout = {
+            x: layout.x - 15,
+            y: Math.max(0, layout.y - 15),
+            width: layout.width + 30,
+            height: layout.height + 30,
+          };
+        }
       }
 
       // Only update if we have a valid layout
       if (layout && layout.width > 0 && layout.height > 0) {
         setHighlightLayout({ 
           x: layout.x, 
-          y: Math.max(0, layout.y - 10), 
+          y: layout.y, 
           width: layout.width, 
-          height: layout.height + 20 
+          height: layout.height
         });
       } else {
         // Clear highlight if measurement fails
@@ -295,6 +313,29 @@ export default function HomeScreen() {
       return () => clearTimeout(timer);
     }
   }, [hintStep, hintModalVisible]);
+
+  // Pulse animation for highlight
+  useEffect(() => {
+    if (hintModalVisible && highlightLayout) {
+      pulseAnim.setValue(0);
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1200,
+            useNativeDriver: false,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 0,
+            duration: 800,
+            useNativeDriver: false,
+          }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.setValue(0);
+    }
+  }, [hintModalVisible, highlightLayout]);
 
   const handleOpenMessages = async () => {
     setMessagesLoading(true);
@@ -752,17 +793,36 @@ export default function HomeScreen() {
         <View style={styles.hintScreenOverlay}>
           {/* Spotlight Overlay */}
           {highlightLayout && (
-            <View
-              style={[
-                styles.spotlightOverlay,
-                {
-                  top: highlightLayout.y,
-                  left: highlightLayout.x,
-                  width: highlightLayout.width,
-                  height: highlightLayout.height,
-                },
-              ]}
-            />
+            <>
+              {/* Outer glow effect */}
+              <Animated.View
+                style={[
+                  styles.spotlightGlow,
+                  {
+                    top: highlightLayout.y,
+                    left: highlightLayout.x,
+                    width: highlightLayout.width,
+                    height: highlightLayout.height,
+                    opacity: pulseAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.3, 0.6],
+                    }),
+                  },
+                ]}
+              />
+              {/* Main highlight */}
+              <View
+                style={[
+                  styles.spotlightOverlay,
+                  {
+                    top: highlightLayout.y,
+                    left: highlightLayout.x,
+                    width: highlightLayout.width,
+                    height: highlightLayout.height,
+                  },
+                ]}
+              />
+            </>
           )}
 
           {/* Semi-transparent dark overlay */}
@@ -1419,17 +1479,29 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     position: 'relative',
   },
+  spotlightGlow: {
+    position: 'absolute',
+    backgroundColor: 'rgba(60, 106, 53, 0.3)',
+    borderRadius: 16,
+    borderWidth: 3,
+    borderColor: 'rgba(60, 106, 53, 0.6)',
+    zIndex: 1,
+  },
   spotlightOverlay: {
     position: 'absolute',
-    backgroundColor: 'rgba(60, 106, 53, 0.15)',
+    backgroundColor: 'rgba(60, 106, 53, 0.2)',
     borderRadius: 16,
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: '#3c6a35',
-    zIndex: 1,
+    zIndex: 2,
+    shadowColor: '#3c6a35',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
   },
   darkOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
     zIndex: 0,
   },
   hintCardWrapper: {
