@@ -246,12 +246,23 @@ export default function ChatScreen() {
           <Text style={styles.backButton}>← Back</Text>
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {requesterName}
-          </Text>
-          <Text style={styles.headerSubtitle} numberOfLines={1}>
-            {requestTitle}
-          </Text>
+          <TouchableOpacity onPress={() => {
+            router.push({
+              pathname: '/(app)/user-profile',
+              params: { userId: requesterId }
+            });
+          }} activeOpacity={0.7}>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {requesterName}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => {
+            router.push(`/(app)/(tabs)/request/${requestId}`);
+          }} activeOpacity={0.7}>
+            <Text style={styles.headerSubtitle} numberOfLines={1}>
+              {requestTitle}
+            </Text>
+          </TouchableOpacity>
         </View>
         <View style={[styles.statusBadge, isConnected && styles.statusOnline]}>
           <Text style={styles.statusDot}>●</Text>
@@ -330,7 +341,7 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 12,
-    color: '#797c6f',
+    color: '#7a7d71',
     marginTop: 2,
   },
   statusBadge: {

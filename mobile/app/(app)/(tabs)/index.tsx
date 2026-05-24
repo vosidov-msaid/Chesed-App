@@ -388,7 +388,7 @@ export default function HomeScreen() {
                 otherUserBio: otherUser.bio || `ID: ${otherUser.id.substring(0, 8)}...`,
                 requestId: commitment.request_id,
                 requestTitle: request?.title || 'Request',
-                notes: commitment.notes || 'No message',
+                notes: commitment.notes,
                 status: commitment.status,
                 createdAt: commitment.created_at,
                 otherUser,
@@ -405,7 +405,7 @@ export default function HomeScreen() {
                 otherUserBio: 'ID: ' + otherUserId.substring(0, 8),
                 requestId: commitment.request_id,
                 requestTitle: request?.title || 'Request',
-                notes: commitment.notes || 'No message',
+                notes: commitment.notes,
                 status: commitment.status,
                 createdAt: commitment.created_at,
                 otherUser: null,
@@ -660,81 +660,57 @@ export default function HomeScreen() {
             <FlatList
               data={messages}
               keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.messageItem}
-                  onPress={() => {
-                    router.push({
-                      pathname: '/chat',
-                      params: {
-                        commitmentId: item.id,
-                        requestId: item.requestId,
-                        requesterId: item.otherUserId,
-                        requesterName: item.otherUserName,
-                        requestTitle: item.requestTitle,
-                        isFromMessages: 'true',
-                      },
-                    });
-                    setMessagesModalVisible(false);
-                  }}
-                >
-                  {/* User Profile Section */}
+              renderItem={({ item }) => {
+                const firstLetter = item.otherUserName?.charAt(0).toUpperCase() || '?';
+                const timestamp = new Date(item.createdAt);
+                const today = new Date();
+                const isToday = timestamp.toDateString() === today.toDateString();
+                const timeString = isToday 
+                  ? timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                  : timestamp.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+                return (
                   <TouchableOpacity
-                    style={styles.messageProfileRow}
+                    style={styles.messengerMessageItem}
                     onPress={() => {
-                      console.log('Navigating to profile with userId:', item.otherUserId);
-                      setMessagesModalVisible(false);
                       router.push({
-                        pathname: '/(app)/user-profile',
+                        pathname: '/chat',
                         params: {
-                          userId: item.otherUserId,
+                          commitmentId: item.id,
+                          requestId: item.requestId,
+                          requesterId: item.otherUserId,
+                          requesterName: item.otherUserName,
+                          requestTitle: item.requestTitle,
+                          isFromMessages: 'true',
                         },
                       });
+                      setMessagesModalVisible(false);
                     }}
                     activeOpacity={0.7}
                   >
-                    <View style={styles.messageBadge}>
-                      <Text style={styles.messageBadgeEmoji}>👤</Text>
+                    {/* Avatar */}
+                    <View style={styles.messengerAvatar}>
+                      <Text style={styles.messengerAvatarText}>{firstLetter}</Text>
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.messageHelperName}>{item.otherUserName}</Text>
-                      <Text style={styles.messageHelperBio}>{item.otherUserBio}</Text>
-                    </View>
-                    <Text style={styles.profileLink}>→</Text>
-                  </TouchableOpacity>
 
-                  {/* Request Info - Clickable */}
-                  <TouchableOpacity
-                   style={styles.messageRequestInfo}
-                   onPress={() => {
-                     router.push(`/(app)/(tabs)/request/${item.requestId}`);
-                     setMessagesModalVisible(false);
-                   }}
-                  >
-                   <Text style={styles.messageRequestLabel}>Request:</Text>
-                   <Text style={styles.messageRequestTitle} numberOfLines={1}>
-                     {item.requestTitle}
-                   </Text>
-                   <Text style={styles.requestDetailsLink}>View Details →</Text>
-                  </TouchableOpacity>
-
-                  {/* Message Content */}
-                  <View style={styles.messageContentWrapper}>
-                    <Text style={styles.messageContent}>{item.notes}</Text>
-                    <View style={styles.messageFooter}>
-                      <Text style={styles.messageStatus}>{item.status}</Text>
-                      <Text style={styles.messageTime}>
-                        {new Date(item.createdAt).toLocaleDateString()}
+                    {/* Content */}
+                    <View style={styles.messengerContent}>
+                      <View style={styles.messengerHeader}>
+                        <Text style={styles.messengerName} numberOfLines={1}>{item.otherUserName}</Text>
+                        <Text style={styles.messengerTime}>{timeString}</Text>
+                      </View>
+                      <Text style={styles.messengerPreview} numberOfLines={1}>
+                        {item.notes || item.requestTitle}
                       </Text>
                     </View>
-                  </View>
 
-                  {/* Chat Button */}
-                  <View style={styles.messageChatButton}>
-                    <Text style={styles.messageChatButtonText}>💬 View Chat</Text>
-                  </View>
-                </TouchableOpacity>
-              )}
+                    {/* Status Indicator */}
+                    <View style={styles.messengerIndicator}>
+                      <View style={[styles.statusDot, { backgroundColor: item.status === 'active' ? '#3c6a35' : '#e2e4d4' }]} />
+                    </View>
+                  </TouchableOpacity>
+                );
+              }}
               contentContainerStyle={styles.messagesListContent}
             />
           )}
@@ -1364,113 +1340,72 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   messagesListContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 0,
   },
-  messageItem: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#3c6a35',
-  },
-  messageProfileRow: {
+  messengerMessageItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
-    paddingBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f4ed',
+    gap: 12,
   },
-  messageBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f0f4ed',
+  messengerAvatarContainer: {
+    flexShrink: 0,
+  },
+  messengerAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#3c6a35',
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
-  messageBadgeEmoji: {
+  messengerAvatarText: {
     fontSize: 20,
-  },
-  messageHelperName: {
-    fontSize: 14,
     fontWeight: '700',
-    color: '#303429',
+    color: '#ffffff',
   },
-  messageHelperBio: {
-    fontSize: 12,
-    color: '#797c6f',
-    marginTop: 2,
+  messengerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 4,
   },
-  profileLink: {
-    fontSize: 16,
-    color: '#3c6a35',
-    fontWeight: '600',
-  },
-  messageRequestInfo: {
-    marginBottom: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f4ed',
-  },
-  messageRequestLabel: {
-    fontSize: 11,
-    color: '#797c6f',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    marginBottom: 4,
-  },
-  messageRequestTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#303429',
-    marginBottom: 6,
-  },
-  requestDetailsLink: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#3c6a35',
-  },
-  messageContentWrapper: {
-    marginBottom: 12,
-  },
-  messageContent: {
-    fontSize: 14,
-    color: '#303429',
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  messageFooter: {
+  messengerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
   },
-  messageStatus: {
-    fontSize: 11,
-    color: '#3c6a35',
+  messengerName: {
+    fontSize: 15,
     fontWeight: '600',
-    textTransform: 'capitalize',
+    color: '#303429',
+    flex: 1,
   },
-  messageTime: {
-    fontSize: 11,
+  messengerTime: {
+    fontSize: 12,
     color: '#797c6f',
+    fontWeight: '500',
   },
-  messageChatButton: {
-    backgroundColor: '#f0f4ed',
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#3c6a35',
-  },
-  messageChatButtonText: {
+  messengerPreview: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#3c6a35',
+    color: '#797c6f',
+    lineHeight: 18,
+  },
+  messengerIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
 
   // Hint Modal Styles
